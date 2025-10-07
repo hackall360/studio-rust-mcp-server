@@ -50,8 +50,12 @@ local function connectWebSocket()
 	client.MessageReceived:Connect(function(message)
 		log("[MCP] Message received")
 
-		local body = HttpService:JSONDecode(message)
-		assert(body and body.id and body.args, "Invalid message received")
+                local body = HttpService:JSONDecode(message)
+                assert(body and body.id and body.args, "Invalid message received")
+                assert(type(body.args) == "table", "Invalid message args payload")
+                assert(type(body.args.tool) == "string", "Missing tool identifier in payload")
+                assert(body.args.params ~= nil, "Missing params in payload")
+                assert(type(body.args.params) == "table", "Invalid params payload")
 
 		local id: string = body.id
 		local responseSent = false

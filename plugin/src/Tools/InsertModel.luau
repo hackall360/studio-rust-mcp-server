@@ -123,16 +123,21 @@ local function insertFromMarketplace(query: string): string
 end
 
 local function handleInsertModel(args: Types.ToolArgs): string?
-	if not args["InsertModel"] then
-		return nil
-	end
+        if args.tool ~= "InsertModel" then
+                return nil
+        end
 
-	local insertModelArgs: Types.InsertModelArgs = args["InsertModel"]
-	if type(insertModelArgs.query) ~= "string" then
-		error("Missing query in InsertModel")
-	end
+        local params = args.params
+        if type(params) ~= "table" then
+                error("Missing params in InsertModel payload")
+        end
 
-	return insertFromMarketplace(insertModelArgs.query)
+        local query = params.query
+        if type(query) ~= "string" then
+                error("Missing query in InsertModel")
+        end
+
+        return insertFromMarketplace(query)
 end
 
 return handleInsertModel :: Types.ToolFunction

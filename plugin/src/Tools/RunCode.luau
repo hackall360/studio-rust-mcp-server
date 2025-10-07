@@ -118,16 +118,21 @@ local function runCodeWithOutput(command: string): string
 end
 
 local function handleRunCode(args: Types.ToolArgs): string?
-	if not args["RunCode"] then
-		return nil
-	end
+        if args.tool ~= "RunCode" then
+                return nil
+        end
 
-	local runCodeArgs: Types.RunCodeArgs = args["RunCode"]
-	if type(runCodeArgs.command) ~= "string" then
-		error("Missing command in RunCode")
-	end
+        local params = args.params
+        if type(params) ~= "table" then
+                error("Missing params in RunCode payload")
+        end
 
-	return runCodeWithOutput(runCodeArgs.command)
+        local command = params.command
+        if type(command) ~= "string" then
+                error("Missing command in RunCode")
+        end
+
+        return runCodeWithOutput(command)
 end
 
 return handleRunCode :: Types.ToolFunction
