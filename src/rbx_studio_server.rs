@@ -102,6 +102,7 @@ struct InsertModel {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "tool", content = "params")]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
