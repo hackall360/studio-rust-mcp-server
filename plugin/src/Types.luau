@@ -77,6 +77,45 @@ export type InspectEnvironmentResponse = {
         },
 }
 
+export type EditorSessionSetSelectionAction = {
+        action: "set_selection",
+        paths: { InstancePath },
+}
+
+export type EditorSessionFocusCameraAction = {
+        action: "focus_camera",
+        cframeComponents: CFrameComponents?,
+        focusComponents: CFrameComponents?,
+        fieldOfView: number?,
+}
+
+export type EditorSessionFrameInstancesAction = {
+        action: "frame_instances",
+        paths: { InstancePath },
+        tweenSeconds: number?,
+}
+
+export type EditorSessionOpenScriptAction = {
+        action: "open_script",
+        path: InstancePath,
+        line: number?,
+        column: number?,
+        focus: boolean?,
+}
+
+export type EditorSessionControlArgs =
+        EditorSessionSetSelectionAction
+        | EditorSessionFocusCameraAction
+        | EditorSessionFrameInstancesAction
+        | EditorSessionOpenScriptAction
+
+export type EditorSessionControlResponse = {
+        action: string,
+        success: boolean,
+        message: string?,
+        affectedInstances: number?,
+}
+
 export type DiagnosticsLogOptions = {
         includeErrors: boolean?,
         includeWarnings: boolean?,
@@ -396,6 +435,11 @@ export type ApplyInstanceOperationsToolArgs = {
 export type ManageScriptsToolArgs = {
         tool: "ManageScripts",
         params: ManageScriptsArgs,
+}
+
+export type EditorSessionControlToolArgs = {
+        tool: "EditorSessionControl",
+        params: EditorSessionControlArgs,
 }
 
 export type TestAndPlayAction = "play_solo" | "stop" | "run_tests" | "run_playtest"
