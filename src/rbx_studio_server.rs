@@ -1229,6 +1229,295 @@ struct PhysicsAndNavigationRequest {
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
+struct Color3Components {
+    #[schemars(description = "Red channel intensity between 0 and 1")]
+    r: f64,
+    #[schemars(description = "Green channel intensity between 0 and 1")]
+    g: f64,
+    #[schemars(description = "Blue channel intensity between 0 and 1")]
+    b: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct LightingSettings {
+    #[serde(default)]
+    #[schemars(description = "Ambient light color applied to the scene")]
+    ambient: Option<Color3Components>,
+    #[serde(default)]
+    #[schemars(description = "Outdoor ambient light color")]
+    outdoor_ambient: Option<Color3Components>,
+    #[serde(default)]
+    #[schemars(description = "Brightness applied to all lighting")]
+    brightness: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Time of day represented as hours (0-24)")]
+    clock_time: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Fog color tint")]
+    fog_color: Option<Color3Components>,
+    #[serde(default)]
+    #[schemars(description = "Fog start distance")]
+    fog_start: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Fog end distance")]
+    fog_end: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Lighting technology override (e.g. Future, ShadowMap)")]
+    technology: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct AtmosphereSettings {
+    #[serde(default)]
+    #[schemars(description = "Atmospheric density value")]
+    density: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Atmosphere height offset")]
+    offset: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Atmosphere color tint")]
+    color: Option<Color3Components>,
+    #[serde(default)]
+    #[schemars(description = "Decay color controlling horizon falloff")]
+    decay: Option<Color3Components>,
+    #[serde(default)]
+    #[schemars(description = "Glare intensity")]
+    glare: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Haze contribution")]
+    haze: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct SkySettings {
+    #[serde(default)]
+    #[schemars(description = "Skybox asset id for the back face")]
+    skybox_bk: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Skybox asset id for the bottom face")]
+    skybox_dn: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Skybox asset id for the front face")]
+    skybox_ft: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Skybox asset id for the left face")]
+    skybox_lf: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Skybox asset id for the right face")]
+    skybox_rt: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Skybox asset id for the top face")]
+    skybox_up: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Sun texture asset id")]
+    sun_texture_id: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Moon texture asset id")]
+    moon_texture_id: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Number of stars visible in the sky")]
+    star_count: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Toggle celestial bodies visibility")]
+    celestial_bodies_shown: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct TerrainWaterSettings {
+    #[serde(default)]
+    #[schemars(description = "Water color override")]
+    water_color: Option<Color3Components>,
+    #[serde(default)]
+    #[schemars(description = "Water transparency value (0-1)")]
+    water_transparency: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Water wave size")]
+    water_wave_size: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Water wave speed")]
+    water_wave_speed: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct SoundServiceSettings {
+    #[serde(default)]
+    #[schemars(description = "Ambient reverb preset name")]
+    ambient_reverb: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Respect FilteringEnabled flag for descendant sounds")]
+    respect_filtering_enabled: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "Doppler scale factor applied to 3D sounds")]
+    doppler_scale: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Roll-off scale for sound attenuation")]
+    rolloff_scale: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SoundInstanceControl {
+    #[schemars(description = "Path to the Sound instance that should be modified")]
+    path: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Sound asset id to assign")]
+    sound_id: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Volume level for the sound")]
+    volume: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Playback speed multiplier")]
+    playback_speed: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Looped toggle")]
+    looped: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "If true, play() will be triggered after applying property changes")]
+    play: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "If true, stop() will be triggered after applying property changes")]
+    stop: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "Optional playback position to seek to before applying play/stop")]
+    time_position: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "effect", rename_all = "snake_case")]
+enum PostProcessingEffectEdit {
+    Bloom {
+        #[serde(default)]
+        #[schemars(description = "Optional instance name override to match or assign")]
+        name: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Enable or disable the effect")]
+        enabled: Option<bool>,
+        #[serde(default)]
+        #[schemars(description = "Bloom intensity value")]
+        intensity: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Bloom size value")]
+        size: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Bloom threshold value")]
+        threshold: Option<f64>,
+    },
+    ColorCorrection {
+        #[serde(default)]
+        #[schemars(description = "Optional instance name override to match or assign")]
+        name: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Enable or disable the effect")]
+        enabled: Option<bool>,
+        #[serde(default)]
+        #[schemars(description = "Brightness offset (-1 to 1)")]
+        brightness: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Contrast multiplier (-1 to 1)")]
+        contrast: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Saturation offset (-1 to 1)")]
+        saturation: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Tint color for the correction")]
+        tint_color: Option<Color3Components>,
+    },
+    DepthOfField {
+        #[serde(default)]
+        #[schemars(description = "Optional instance name override to match or assign")]
+        name: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Enable or disable the effect")]
+        enabled: Option<bool>,
+        #[serde(default)]
+        #[schemars(description = "Focus distance for the depth of field")]
+        focus_distance: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Radius of the in focus region")]
+        in_focus_radius: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Intensity applied to near blur")]
+        near_intensity: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Intensity applied to far blur")]
+        far_intensity: Option<f64>,
+    },
+    SunRays {
+        #[serde(default)]
+        #[schemars(description = "Optional instance name override to match or assign")]
+        name: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Enable or disable the effect")]
+        enabled: Option<bool>,
+        #[serde(default)]
+        #[schemars(description = "Sun rays intensity")]
+        intensity: Option<f64>,
+        #[serde(default)]
+        #[schemars(description = "Sun rays spread")]
+        spread: Option<f64>,
+    },
+    Blur {
+        #[serde(default)]
+        #[schemars(description = "Optional instance name override to match or assign")]
+        name: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Enable or disable the effect")]
+        enabled: Option<bool>,
+        #[serde(default)]
+        #[schemars(description = "Blur size value")]
+        size: Option<f64>,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct EnvironmentControlRequest {
+    #[serde(default)]
+    #[schemars(description = "Lighting property overrides applied to the current place")]
+    lighting: Option<LightingSettings>,
+    #[serde(default)]
+    #[schemars(description = "Atmosphere overrides created under Lighting if needed")]
+    atmosphere: Option<AtmosphereSettings>,
+    #[serde(default)]
+    #[schemars(description = "Skybox overrides created under Lighting if needed")]
+    sky: Option<SkySettings>,
+    #[serde(default)]
+    #[schemars(description = "Post processing edits applied under Lighting")]
+    post_processing: Vec<PostProcessingEffectEdit>,
+    #[serde(default)]
+    #[schemars(description = "Workspace terrain water configuration")]
+    terrain_water: Option<TerrainWaterSettings>,
+    #[serde(default)]
+    #[schemars(description = "SoundService level configuration")]
+    sound_service: Option<SoundServiceSettings>,
+    #[serde(default)]
+    #[schemars(description = "Targeted sound instance adjustments")]
+    sounds: Vec<SoundInstanceControl>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct EnvironmentControlResponse {
+    #[schemars(description = "True if all requested adjustments were applied successfully")]
+    success: bool,
+    #[serde(default)]
+    #[schemars(description = "Human readable summary of the applied environment edits")]
+    summary: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "List of granular property changes that were applied")]
+    changes: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Validation or runtime issues encountered while applying edits")]
+    errors: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 struct PhysicsAndNavigationOperationResult {
     #[schemars(description = "Index of the processed operation within the batch")]
     index: usize,
@@ -1263,6 +1552,7 @@ enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
     InspectEnvironment(InspectEnvironment),
+    EnvironmentControl(EnvironmentControlRequest),
     ApplyInstanceOperations(ApplyInstanceOperationsRequest),
     ManageScripts(ManageScriptsRequest),
     TestAndPlayControl(TestAndPlayControl),
@@ -1312,6 +1602,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InspectEnvironment>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InspectEnvironment(args))
+            .await
+    }
+
+    #[tool(
+        description = "Configures lighting, atmosphere, post processing, terrain water, and ambient soundscape settings."
+    )]
+    async fn environment_control(
+        &self,
+        Parameters(args): Parameters<EnvironmentControlRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::EnvironmentControl(args))
             .await
     }
 
