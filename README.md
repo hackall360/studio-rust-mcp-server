@@ -446,7 +446,8 @@ containing a `results` array with per-step status, messages, and structured `det
 ### Supported operations
 
 - `search_marketplace` – Query the Roblox marketplace and return asset metadata (name, creator,
-  asset and version IDs). Use `limit` to cap the number of results (default `10`, max `50`).
+  asset and version IDs). Use `limit` to cap the number of results (default `10`, max `50`) and
+  `creatorName` to filter matches to a specific creator.
 - `insert_asset_version` – Load a specific asset version via `InsertService:LoadAssetVersion`, handle
   naming collisions (`rename`, `overwrite`, or `skip`), place the instance in a target parent, pivot
   it (`camera`, `origin`, `preserve`, or `custom_cframe`), and optionally publish the inserted
