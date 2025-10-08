@@ -129,6 +129,18 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
   array-based paths (e.g. `{ "ServerScriptService", "NPC", "Brain" }`) and can opt into metadata such
   as class names, parent paths, attributes, or run contexts. Source updates are syntax-checked before
   Studio applies them, and responses include diagnostics when a change fails.
+- **`test_and_play_control`** – Coordinate Studio play sessions and automated tests. The
+  `play_solo` and `run_playtest` subcommands drive `StudioService` to start gameplay while
+  continuously streaming console output until the run ends or a timeout is reached. `run_tests`
+  executes `TestService` suites, recording status transitions, diagnostics, and captured errors.
+  The `stop` subcommand issues best-effort shutdown requests for any active play or test run. Each
+  response is encoded as JSON so MCP clients can inspect structured fields such as
+  `statusUpdates`, `summary`, `chunks`, and `logs`.
+
+> **Safety notice:** Starting a play session or running the test harness will execute scripts and
+> may mutate workspace state that has not been saved. Ensure critical changes are committed to
+> source control or saved locally before invoking the play or test tools, and avoid relying on
+> temporary state that might be reset when Studio reloads the environment.
 
 ### Example prompts
 
@@ -179,6 +191,20 @@ The plugin validates each request against a conservative allowlist of supported 
 properties and wraps every property write in `pcall` to provide descriptive error messages. Successful
 batches are bookended with ChangeHistory waypoints so that the entire sequence can be undone with a
 single shortcut in Studio.
+
+To run the automated test suite from Claude or Cursor, you can request:
+
+```
+Use test_and_play_control to run_tests with a 90 second timeout and include the full log history.
+If any tests fail, summarize the failing cases in the response.
+```
+
+To verify gameplay flows end-to-end, ask the assistant to playtest and stream logs back:
+
+```
+Use test_and_play_control to run_playtest with a 120 second timeout.
+Watch for replication or runtime errors while the session is active and stop the run afterwards.
+```
 
 You can also ask Claude or Cursor to scaffold and iterate on scripts without leaving the chat. For
 example, the following prompt creates a server script, updates an existing LocalScript after linting

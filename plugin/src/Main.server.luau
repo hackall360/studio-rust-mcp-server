@@ -74,7 +74,9 @@ local function connectWebSocket()
 			end
 		end
 
-                local shouldRecordHistory = args.tool ~= "InspectEnvironment" and args.tool ~= "ApplyInstanceOperations"
+                local shouldRecordHistory = args.tool ~= "InspectEnvironment"
+                        and args.tool ~= "ApplyInstanceOperations"
+                        and args.tool ~= "TestAndPlayControl"
 		local recording = if shouldRecordHistory
 			then ChangeHistoryService:TryBeginRecording("StudioMCP")
 			else nil

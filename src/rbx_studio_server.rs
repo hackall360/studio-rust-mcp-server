@@ -102,6 +102,51 @@ struct InsertModel {
     query: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "snake_case")]
+enum TestAndPlayAction {
+    #[schemars(description = "Start a standard play solo session and wait for it to finish")]
+    PlaySolo,
+    #[schemars(description = "Stop any running play, playtest, or test execution session")]
+    Stop,
+    #[schemars(description = "Execute TestService tests and collect diagnostics")]
+    RunTests,
+    #[schemars(description = "Start a playtest session (e.g. start server + player)")]
+    RunPlaytest,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct TestAndPlayControlOptions {
+    #[serde(default)]
+    #[schemars(description = "Seconds to wait before treating the action as timed out")]
+    timeout_seconds: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Seconds between polling Studio for status updates")]
+    poll_interval_seconds: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Optional subset of TestService test names to execute")]
+    test_names: Vec<String>,
+    #[serde(default)]
+    #[schemars(
+        description = "Request that the plugin use asynchronous TestService APIs when available"
+    )]
+    run_async: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "Include the captured Studio log history in the response payload")]
+    include_log_history: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TestAndPlayControl {
+    #[schemars(description = "Action that should be applied to the current Studio session")]
+    action: TestAndPlayAction,
+    #[serde(default)]
+    #[schemars(description = "Tuning parameters that control how the action is executed")]
+    options: Option<TestAndPlayControlOptions>,
+}
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 enum InstanceOperationAction {
@@ -402,6 +447,7 @@ enum ToolArgumentValues {
     InspectEnvironment(InspectEnvironment),
     ApplyInstanceOperations(ApplyInstanceOperationsRequest),
     ManageScripts(ManageScriptsRequest),
+    TestAndPlayControl(TestAndPlayControl),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -464,6 +510,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<ManageScriptsRequest>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::ManageScripts(args))
+            .await
+    }
+
+    #[tool(
+        description = "Controls Studio play/test sessions and TestService runs. Supports play_solo, stop, run_tests, and run_playtest."
+    )]
+    async fn test_and_play_control(
+        &self,
+        Parameters(args): Parameters<TestAndPlayControl>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::TestAndPlayControl(args))
             .await
     }
 
