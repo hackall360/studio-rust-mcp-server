@@ -298,46 +298,23 @@ ChangeHistory checkpoint when at least one instance was updated. Read-only batch
 You can ask Claude or Cursor to stage multiple changes at once. For example, the following prompt
 creates a lighting rig and tweaks an existing part in one tool call:
 
+### Bulk instance editing
+
+Use `apply_instance_operations` when you need to touch multiple instances in a single, undoable
+batch. The assistant can resolve instance paths, validate allowed property writes, and surface
+per-operation errors.
+
+Example natural-language prompt for Claude or Cursor:
+
 ```
 Use apply_instance_operations to:
 1. Create a PointLight at Workspace/LightingRig/PointLight with Brightness 3 and Range 18.
 2. Update Workspace/SetPiece/SpotlightCube so its Color is (1, 0.8, 0.6) and Transparency is 0.25.
 3. Delete Workspace/Temporary/DebugFolder.
+Summarize which edits succeeded and report any validation errors.
 ```
 
-To label a group of instances and synchronise designer-authored metadata, try a prompt like:
-
-```
-Use collection_and_attributes to:
-1. list_tags for Workspace/Levels/Hub/MerchantStand and Workspace/Levels/Hub/Blacksmith with attributes.
-2. add_tags to those same paths with ["shop", "hub-service"].
-3. sync_attributes on Workspace/Levels/Hub/MerchantStand with { "OpensAt": 6, "ClosesAt": 22, "Currency": "Gold" } and clearMissing true.
-4. query_by_tag for "hub-service" including paths and attributes.
-Summarize any skips or errors in the response.
-```
-
-### Requesting diagnostics
-
-The `diagnostics_and_metrics` tool accepts a payload that lets you tailor what Studio collects. For
-example:
-
-```
-{
-  "logs": { "maxEntries": 120, "chunkSize": 40 },
-  "includeMemoryStats": true,
-  "includeTaskScheduler": true,
-  "includeMicroProfiler": false,
-  "serviceSelection": { "services": ["Workspace", "Players"] }
-}
-```
-
-Set `includeMicroProfiler` to `true` only after enabling the MicroProfiler in Studio (View →
-MicroProfiler or File → Studio Settings → Diagnostics → Allow MicroProfiler). Roblox requires that
-permission to be granted per-user; without it the tool will return a note explaining that the dump
-is unavailable. Error and warning logs are chunked for long sessions so MCP clients can page through
-them without hitting token limits.
-
-The MCP client will translate that request into JSON similar to:
+The MCP client expands that request into JSON similar to:
 
 ```json
 {
@@ -370,10 +347,44 @@ The MCP client will translate that request into JSON similar to:
 }
 ```
 
-The plugin validates each request against a conservative allowlist of supported classes and
-properties and wraps every property write in `pcall` to provide descriptive error messages. Successful
-batches are bookended with ChangeHistory waypoints so that the entire sequence can be undone with a
-single shortcut in Studio.
+Every property write is wrapped in `pcall` and checked against a conservative allowlist (for example,
+lights expose `Brightness`, `Color`, and `Range`; base parts allow `Anchored`, `CFrame`, and `Size`).
+Create operations are limited to safe classes, and delete operations refuse to destroy the `DataModel`
+root or services parented directly under it. Successful batches automatically wrap the work inside
+`ChangeHistoryService` waypoints, and the response includes a `writeOccurred` flag so callers can
+decide whether to keep or discard the undo checkpoint.
+
+To label a group of instances and synchronise designer-authored metadata, try a prompt like:
+
+```
+Use collection_and_attributes to:
+1. list_tags for Workspace/Levels/Hub/MerchantStand and Workspace/Levels/Hub/Blacksmith with attributes.
+2. add_tags to those same paths with ["shop", "hub-service"].
+3. sync_attributes on Workspace/Levels/Hub/MerchantStand with { "OpensAt": 6, "ClosesAt": 22, "Currency": "Gold" } and clearMissing true.
+4. query_by_tag for "hub-service" including paths and attributes.
+Summarize any skips or errors in the response.
+```
+
+### Requesting diagnostics
+
+The `diagnostics_and_metrics` tool accepts a payload that lets you tailor what Studio collects. For
+example:
+
+```
+{
+  "logs": { "maxEntries": 120, "chunkSize": 40 },
+  "includeMemoryStats": true,
+  "includeTaskScheduler": true,
+  "includeMicroProfiler": false,
+  "serviceSelection": { "services": ["Workspace", "Players"] }
+}
+```
+
+Set `includeMicroProfiler` to `true` only after enabling the MicroProfiler in Studio (View →
+MicroProfiler or File → Studio Settings → Diagnostics → Allow MicroProfiler). Roblox requires that
+permission to be granted per-user; without it the tool will return a note explaining that the dump
+is unavailable. Error and warning logs are chunked for long sessions so MCP clients can page through
+them without hitting token limits.
 
 To run the automated test suite from Claude or Cursor, you can request:
 

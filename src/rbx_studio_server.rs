@@ -204,6 +204,9 @@ struct ApplyInstanceOperationsResponse {
     #[serde(default)]
     #[schemars(description = "High level summary of the batch execution")]
     summary: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "True when at least one operation mutated the DataModel")]
+    write_occurred: bool,
 }
 
 fn default_true() -> bool {
