@@ -280,6 +280,76 @@ export type CollectionAndAttributesResponse = {
         affectedInstances: number?,
 }
 
+export type PhysicsAgentParameters = {
+        agentRadius: number?,
+        agentHeight: number?,
+        agentCanJump: boolean?,
+        agentMaxSlope: number?,
+}
+
+export type PhysicsCreateCollisionGroupOperation = {
+        operation: "create_collision_group",
+        groupName: string,
+        replaceExisting: boolean?,
+        active: boolean?,
+}
+
+export type PhysicsSetCollisionEnabledOperation = {
+        operation: "set_collision_enabled",
+        groupA: string,
+        groupB: string,
+        collidable: boolean,
+        groupAActive: boolean?,
+        groupBActive: boolean?,
+}
+
+export type PhysicsAssignPartToGroupOperation = {
+        operation: "assign_part_to_group",
+        path: InstancePath,
+        groupName: string,
+}
+
+export type PhysicsComputePathOperation = {
+        operation: "compute_path",
+        startPosition: Vector3Record,
+        targetPosition: Vector3Record,
+        agentParameters: PhysicsAgentParameters?,
+}
+
+export type PhysicsAndNavigationOperation =
+        PhysicsCreateCollisionGroupOperation
+        | PhysicsSetCollisionEnabledOperation
+        | PhysicsAssignPartToGroupOperation
+        | PhysicsComputePathOperation
+
+export type PhysicsWaypoint = {
+        position: Vector3Record,
+        action: string,
+        label: string?,
+}
+
+export type PhysicsAndNavigationOperationResult = {
+        index: number,
+        operation:
+                | "create_collision_group"
+                | "set_collision_enabled"
+                | "assign_part_to_group"
+                | "compute_path",
+        success: boolean,
+        message: string?,
+        details: { [string]: any }?,
+}
+
+export type PhysicsAndNavigationRequest = {
+        operations: { PhysicsAndNavigationOperation },
+}
+
+export type PhysicsAndNavigationResponse = {
+        results: { PhysicsAndNavigationOperationResult },
+        summary: string?,
+        writeOccurred: boolean,
+}
+
 export type InstanceOperationAction =
         "create"
         | "update"
@@ -482,6 +552,11 @@ export type TerrainOperationsToolArgs = {
 export type CollectionAndAttributesToolArgs = {
         tool: "CollectionAndAttributes",
         params: CollectionAndAttributesRequest,
+}
+
+export type PhysicsAndNavigationToolArgs = {
+        tool: "PhysicsAndNavigation",
+        params: PhysicsAndNavigationRequest,
 }
 
 export type ApplyInstanceOperationsToolArgs = {

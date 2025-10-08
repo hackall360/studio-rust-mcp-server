@@ -102,6 +102,28 @@ local function shouldRecordHistoryForRequest(args: Types.ToolArgs): boolean
                 return false
         end
 
+        if args.tool == "PhysicsAndNavigation" then
+                local params = args.params
+                if type(params) == "table" then
+                        local operations = params.operations
+                        if type(operations) == "table" then
+                                for _, operation in operations do
+                                        if type(operation) == "table" then
+                                                local operationName = operation.operation
+                                                if operationName == "create_collision_group"
+                                                        or operationName == "set_collision_enabled"
+                                                        or operationName == "assign_part_to_group"
+                                                then
+                                                        return true
+                                                end
+                                        end
+                                end
+                                return false
+                        end
+                end
+                return false
+        end
+
         return true
 end
 
@@ -156,12 +178,15 @@ local function connectWebSocket()
 
                         if success and response then
                                 if shouldRecordHistory and not historyWriteOccurred then
-                                        if args.tool == "TerrainOperations" or args.tool == "CollectionAndAttributes" then
-                                                local ok, decoded = pcall(HttpService.JSONDecode, HttpService, response)
-                                                if ok
-                                                        and type(decoded) == "table"
-                                                        and decoded.writeOccurred == true
-                                                then
+                                if args.tool == "TerrainOperations"
+                                        or args.tool == "CollectionAndAttributes"
+                                        or args.tool == "PhysicsAndNavigation"
+                                then
+                                        local ok, decoded = pcall(HttpService.JSONDecode, HttpService, response)
+                                        if ok
+                                                and type(decoded) == "table"
+                                                and decoded.writeOccurred == true
+                                        then
                                                         historyWriteOccurred = true
                                                 end
                                         else

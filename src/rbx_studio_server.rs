@@ -1124,6 +1124,140 @@ struct CollectionAndAttributesResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+struct PhysicsVector3Components {
+    #[schemars(description = "X component in studs")]
+    x: f64,
+    #[schemars(description = "Y component in studs")]
+    y: f64,
+    #[schemars(description = "Z component in studs")]
+    z: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct PhysicsAgentParameters {
+    #[schemars(description = "Agent radius passed to PathfindingService:CreatePath")]
+    agent_radius: Option<f64>,
+    #[schemars(description = "Agent height passed to PathfindingService:CreatePath")]
+    agent_height: Option<f64>,
+    #[schemars(description = "Agent jump capability passed to PathfindingService:CreatePath")]
+    agent_can_jump: Option<bool>,
+    #[schemars(description = "Agent max slope passed to PathfindingService:CreatePath")]
+    agent_max_slope: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PhysicsCollisionGroupCreation {
+    #[schemars(description = "Name of the collision group to create")]
+    group_name: String,
+    #[serde(default)]
+    #[schemars(
+        description = "Remove an existing collision group with the same name before creating"
+    )]
+    replace_existing: bool,
+    #[serde(default)]
+    #[schemars(description = "Optional active state applied after the group is created")]
+    active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PhysicsCollisionPairTuning {
+    #[schemars(description = "Name of the first collision group in the pair")]
+    group_a: String,
+    #[schemars(description = "Name of the second collision group in the pair")]
+    group_b: String,
+    #[schemars(description = "Whether the two groups should be collidable")]
+    collidable: bool,
+    #[serde(default)]
+    #[schemars(
+        description = "Optional active state override applied to group_a before updating the pair"
+    )]
+    group_a_active: Option<bool>,
+    #[serde(default)]
+    #[schemars(
+        description = "Optional active state override applied to group_b before updating the pair"
+    )]
+    group_b_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PhysicsAssignPartRequest {
+    #[schemars(description = "Instance path segments that should resolve to a BasePart")]
+    path: Vec<String>,
+    #[schemars(description = "Collision group that the resolved BasePart will be assigned to")]
+    group_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PhysicsComputePathOperation {
+    #[schemars(description = "World position where the path should begin")]
+    start_position: PhysicsVector3Components,
+    #[schemars(description = "World position where the path should end")]
+    target_position: PhysicsVector3Components,
+    #[serde(default)]
+    #[schemars(description = "Optional pathfinding parameters forwarded to CreatePath")]
+    agent_parameters: Option<PhysicsAgentParameters>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "operation", rename_all = "snake_case")]
+enum PhysicsAndNavigationOperation {
+    #[schemars(
+        description = "Create a PhysicsService collision group if it does not already exist"
+    )]
+    CreateCollisionGroup(PhysicsCollisionGroupCreation),
+    #[schemars(
+        description = "Update collidability and optional active state for a collision group pair"
+    )]
+    SetCollisionEnabled(PhysicsCollisionPairTuning),
+    #[schemars(description = "Assign a resolved BasePart to a PhysicsService collision group")]
+    AssignPartToGroup(PhysicsAssignPartRequest),
+    #[schemars(description = "Compute a navigation path between two world positions")]
+    ComputePath(PhysicsComputePathOperation),
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PhysicsAndNavigationRequest {
+    #[schemars(description = "Batch of physics/pathfinding operations to run sequentially")]
+    operations: Vec<PhysicsAndNavigationOperation>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PhysicsAndNavigationOperationResult {
+    #[schemars(description = "Index of the processed operation within the batch")]
+    index: usize,
+    #[schemars(description = "Identifier of the executed operation")]
+    operation: String,
+    #[schemars(description = "True when the operation completed successfully")]
+    success: bool,
+    #[serde(default)]
+    #[schemars(description = "Optional human readable status message")]
+    message: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Structured details returned by the operation (such as waypoints)")]
+    details: Option<JsonValue>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PhysicsAndNavigationResponse {
+    #[schemars(description = "Per-operation results describing the batch execution")]
+    results: Vec<PhysicsAndNavigationOperationResult>,
+    #[serde(default)]
+    #[schemars(description = "Optional summary of the applied operations")]
+    summary: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "True when at least one operation mutated collision data")]
+    write_occurred: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(tag = "tool", content = "params")]
 enum ToolArgumentValues {
     RunCode(RunCode),
@@ -1136,6 +1270,7 @@ enum ToolArgumentValues {
     TerrainOperations(TerrainOperationsRequest),
     AssetPipeline(AssetPipelineRequest),
     CollectionAndAttributes(CollectionAndAttributesRequest),
+    PhysicsAndNavigation(PhysicsAndNavigationRequest),
     DiagnosticsAndMetrics(DiagnosticsAndMetricsRequest),
 }
 #[tool_router]
@@ -1254,6 +1389,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<CollectionAndAttributesRequest>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::CollectionAndAttributes(args))
+            .await
+    }
+
+    #[tool(
+        description = "Coordinates PhysicsService collision groups and PathfindingService navigation queries."
+    )]
+    async fn physics_and_navigation(
+        &self,
+        Parameters(args): Parameters<PhysicsAndNavigationRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::PhysicsAndNavigation(args))
             .await
     }
 
