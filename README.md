@@ -165,6 +165,32 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
 > source control or saved locally before invoking the play or test tools, and avoid relying on
 > temporary state that might be reset when Studio reloads the environment.
 
+### Inspecting the Studio environment
+
+You can ask Claude or Cursor to sample the current environment by calling:
+
+```json
+{
+  "tool": "InspectEnvironment",
+  "params": {
+    "selection": { "includeFullNames": false },
+    "camera": { "includeFocus": false },
+    "services": { "services": ["Workspace", "Players"], "includeCounts": true }
+  }
+}
+```
+
+The response is JSON with the following sections:
+
+- `selection`: Total selected instances plus per-item `name`, `className`, and `fullName` (opt-in).
+- `camera`: Indicates whether `Workspace.CurrentCamera` exists, and includes the CFrame/focus
+  vectors and field of view when requested.
+- `services`: Reports requested service availability, optionally including descendant counts.
+- `metadata.generatedAt`: Timestamp (ISO 8601) that the plugin recorded for traceability.
+
+These payloads are ideal for prompts such as "summarise the selected models" or "describe the camera
+setup" without mutating the place or creating ChangeHistory checkpoints.
+
 ### Terrain authoring workflow
 
 `terrain_operations` requests look like the following:

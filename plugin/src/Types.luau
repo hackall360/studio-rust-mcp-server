@@ -29,6 +29,54 @@ export type InspectEnvironmentArgs = {
         services: InspectServicesScope?,
 }
 
+export type InspectSelectionItem = {
+        name: string?,
+        className: string?,
+        fullName: string?,
+}
+
+export type InspectSelectionResult = {
+        total: number,
+        items: { InspectSelectionItem },
+}
+
+export type Vector3Record = { x: number, y: number, z: number }
+
+export type InspectCameraFrame = {
+        position: Vector3Record,
+        lookVector: Vector3Record,
+        upVector: Vector3Record,
+        rightVector: Vector3Record,
+}
+
+export type InspectCameraResult =
+        ({
+                available: true,
+                cframe: InspectCameraFrame?,
+                focus: InspectCameraFrame?,
+                fieldOfView: number?,
+        })
+        | ({
+                available: false,
+                reason: string,
+        })
+
+export type InspectServicesMap = { [string]: number | string }
+
+export type InspectServicesResult = {
+        includeCounts: boolean,
+        services: InspectServicesMap,
+}
+
+export type InspectEnvironmentResponse = {
+        selection: InspectSelectionResult,
+        camera: InspectCameraResult,
+        services: InspectServicesResult,
+        metadata: {
+                generatedAt: string,
+        },
+}
+
 export type DiagnosticsLogOptions = {
         includeErrors: boolean?,
         includeWarnings: boolean?,
