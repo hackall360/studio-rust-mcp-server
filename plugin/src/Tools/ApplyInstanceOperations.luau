@@ -6,6 +6,8 @@ local HttpService = game:GetService("HttpService")
 
 type ApplyInstanceOperation = Types.ApplyInstanceOperation
 type ApplyInstanceOperationsArgs = Types.ApplyInstanceOperationsArgs
+type ApplyInstanceOperationResult = Types.ApplyInstanceOperationResult
+type ApplyInstanceOperationsResponse = Types.ApplyInstanceOperationsResponse
 
 local CREATE_CLASS_ALLOWLIST = {
         Folder = true,
@@ -21,6 +23,11 @@ local CREATE_CLASS_ALLOWLIST = {
         BillboardGui = true,
         ScreenGui = true,
         Attachment = true,
+}
+
+local ROOT_DELETE_ALLOWLIST = {
+        Folder = true,
+        Model = true,
 }
 
 local PROPERTY_ALLOWLIST: { [string]: { [string]: true } } = {
@@ -77,10 +84,19 @@ local PROPERTY_ALLOWLIST: { [string]: { [string]: true } } = {
 }
 
 local function clonePath(path: Types.InstancePath): { string }
-        local result = table.create(#path)
-        for _, segment in path do
-                table.insert(result, segment)
+        local result = {}
+        if type(path) ~= "table" then
+                return result
         end
+
+        local count = #path
+        if count > 0 then
+                result = table.create(count)
+                for _, segment in path do
+                        table.insert(result, segment)
+                end
+        end
+
         return result
 end
 
@@ -302,6 +318,20 @@ local function applyDelete(operation: ApplyInstanceOperation): (boolean, string?
                 return false, errorMessage
         end
 
+        if target == game then
+                return false, "Destroying the DataModel root is not permitted"
+        end
+
+        if target.Parent == game then
+                local className = target.ClassName
+                if className:sub(-7) == "Service" then
+                        return false, string.format("Destroying %s services is not permitted", className)
+                end
+                if not ROOT_DELETE_ALLOWLIST[className] then
+                        return false, string.format("Destroying top-level %s instances is not permitted", className)
+                end
+        end
+
         local ok, err = pcall(function()
                 target:Destroy()
         end)
@@ -319,7 +349,7 @@ local ACTION_HANDLERS: { [Types.InstanceOperationAction]: (ApplyInstanceOperatio
         delete = applyDelete,
 }
 
-local function applyOperations(params: ApplyInstanceOperationsArgs): { [string]: any }
+local function applyOperations(params: ApplyInstanceOperationsArgs): ApplyInstanceOperationsResponse
         local operations = params.operations
         if type(operations) ~= "table" or #operations == 0 then
                 error("apply_instance_operations requires at least one operation")
@@ -330,7 +360,7 @@ local function applyOperations(params: ApplyInstanceOperationsArgs): { [string]:
                 ChangeHistoryService:SetWaypoint("Before ApplyInstanceOperations")
         end
 
-        local results = table.create(#operations)
+        local results: { ApplyInstanceOperationResult } = table.create(#operations)
         local successes = 0
 
         for index, operation in operations do
@@ -339,7 +369,7 @@ local function applyOperations(params: ApplyInstanceOperationsArgs): { [string]:
                         results[index] = {
                                 index = index,
                                 action = operation.action,
-                                path = operation.path,
+                                path = clonePath(operation.path),
                                 success = false,
                                 message = string.format("Unsupported action '%s'", tostring(operation.action)),
                         }
@@ -351,7 +381,7 @@ local function applyOperations(params: ApplyInstanceOperationsArgs): { [string]:
                         results[index] = {
                                 index = index,
                                 action = operation.action,
-                                path = operation.path,
+                                path = clonePath(operation.path),
                                 success = success,
                                 message = message,
                         }
@@ -367,11 +397,17 @@ local function applyOperations(params: ApplyInstanceOperationsArgs): { [string]:
                         end
         end
 
-        local summary = string.format("Applied %d/%d operations", successes, #operations)
+        local total = #operations
+        local failures = total - successes
+        local summary = string.format("Applied %d of %d operations", successes, total)
+        if failures > 0 then
+                summary ..= string.format(" (%d failed)", failures)
+        end
+
         return {
                 results = results,
                 summary = summary,
-                success = successes == #operations,
+                writeOccurred = successes > 0,
         }
 end
 

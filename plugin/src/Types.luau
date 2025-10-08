@@ -257,6 +257,20 @@ export type ApplyInstanceOperationsArgs = {
         operations: { ApplyInstanceOperation },
 }
 
+export type ApplyInstanceOperationResult = {
+        index: number,
+        action: InstanceOperationAction,
+        path: InstancePath,
+        success: boolean,
+        message: string?,
+}
+
+export type ApplyInstanceOperationsResponse = {
+        results: { ApplyInstanceOperationResult },
+        summary: string?,
+        writeOccurred: boolean,
+}
+
 export type ScriptPath = { string }
 
 export type ScriptMetadataRequest = {
