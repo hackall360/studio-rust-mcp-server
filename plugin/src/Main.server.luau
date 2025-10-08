@@ -23,16 +23,86 @@ local function log(...)
 end
 
 local function fetchBuiltinTools()
-	local tools = {}
-	for _, tool in Main.Tools:GetChildren() do
-		if tool:IsA("ModuleScript") then
-			table.insert(tools, require(tool) :: Types.ToolFunction)
-		end
-	end
-	return tools
+        local tools = {}
+        for _, tool in Main.Tools:GetChildren() do
+                if tool:IsA("ModuleScript") then
+                        table.insert(tools, require(tool) :: Types.ToolFunction)
+                end
+        end
+        return tools
 end
 
 local tools = fetchBuiltinTools()
+
+local function shouldRecordHistoryForRequest(args: Types.ToolArgs): boolean
+        if args.tool == "InspectEnvironment"
+                or args.tool == "DiagnosticsAndMetrics"
+                or args.tool == "ApplyInstanceOperations"
+                or args.tool == "TestAndPlayControl"
+        then
+                return false
+        end
+
+        if args.tool == "ManageScripts" then
+                local params = args.params
+                if type(params) == "table" then
+                        local operations = params.operations
+                        if type(operations) == "table" then
+                                for _, operation in operations do
+                                        if type(operation) == "table" then
+                                                local action = operation.action
+                                                if action ~= "get_source" then
+                                                        return true
+                                                end
+                                        end
+                                end
+                                return false
+                        end
+                end
+        end
+
+        if args.tool == "AssetPipeline" then
+                local params = args.params
+                if type(params) == "table" then
+                        local operations = params.operations
+                        if type(operations) == "table" then
+                                for _, operation in operations do
+                                        if type(operation) == "table" then
+                                                local action = operation.action
+                                                if action ~= "search_marketplace" then
+                                                        return true
+                                                end
+                                        end
+                                end
+                                return false
+                        end
+                end
+        end
+
+        if args.tool == "CollectionAndAttributes" then
+                local params = args.params
+                if type(params) == "table" then
+                        local operations = params.operations
+                        if type(operations) == "table" then
+                                for _, operation in operations do
+                                        if type(operation) == "table" then
+                                                local operationName = operation.operation
+                                                if operationName == "add_tags"
+                                                        or operationName == "remove_tags"
+                                                        or operationName == "sync_attributes"
+                                                then
+                                                        return true
+                                                end
+                                        end
+                                end
+                                return false
+                        end
+                end
+                return false
+        end
+
+        return true
+end
 
 local function connectWebSocket()
 	local client = MockWebSocketService:CreateClient(URI)
@@ -74,9 +144,7 @@ local function connectWebSocket()
 			end
 		end
 
-                local shouldRecordHistory = args.tool ~= "InspectEnvironment"
-                        and args.tool ~= "ApplyInstanceOperations"
-                        and args.tool ~= "TestAndPlayControl"
+                local shouldRecordHistory = shouldRecordHistoryForRequest(args)
                 local recording = if shouldRecordHistory
                         then ChangeHistoryService:TryBeginRecording("StudioMCP")
                         else nil
@@ -87,7 +155,7 @@ local function connectWebSocket()
 
                         if success and response then
                                 if shouldRecordHistory and not historyWriteOccurred then
-                                        if args.tool == "TerrainOperations" then
+                                        if args.tool == "TerrainOperations" or args.tool == "CollectionAndAttributes" then
                                                 local ok, decoded = pcall(HttpService.JSONDecode, HttpService, response)
                                                 if ok
                                                         and type(decoded) == "table"

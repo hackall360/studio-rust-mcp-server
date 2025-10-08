@@ -856,6 +856,100 @@ impl Default for DiagnosticsAndMetricsRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CollectionAndAttributesRequest {
+    #[schemars(description = "Ordered set of tag or attribute operations to execute")]
+    operations: Vec<CollectionAndAttributesOperation>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "operation", rename_all = "snake_case")]
+enum CollectionAndAttributesOperation {
+    #[schemars(
+        description = "Return CollectionService tags (and optional attributes) for specific instances"
+    )]
+    ListTags {
+        #[schemars(description = "Instance paths to inspect for tag metadata")]
+        paths: Vec<Vec<String>>,
+        #[serde(default)]
+        #[schemars(description = "Include Instance:GetAttributes() output for each path")]
+        include_attributes: bool,
+    },
+    #[schemars(description = "Apply CollectionService tags to one or more instances")]
+    AddTags {
+        #[schemars(description = "Instance paths that will receive the provided tags")]
+        paths: Vec<Vec<String>>,
+        #[schemars(description = "Tags that should be added to every resolved instance")]
+        tags: Vec<String>,
+    },
+    #[schemars(description = "Remove CollectionService tags from one or more instances")]
+    RemoveTags {
+        #[schemars(description = "Instance paths that will have the provided tags removed")]
+        paths: Vec<Vec<String>>,
+        #[schemars(description = "Tags that should be removed from every resolved instance")]
+        tags: Vec<String>,
+    },
+    #[schemars(description = "Synchronise Instance attributes with the provided key/value map")]
+    SyncAttributes {
+        #[schemars(description = "Instance paths whose attributes will be updated")]
+        paths: Vec<Vec<String>>,
+        #[schemars(description = "Attributes that should be written via Instance:SetAttribute")]
+        attributes: HashMap<String, JsonValue>,
+        #[serde(default)]
+        #[schemars(
+            description = "Remove existing attributes that are not present in the provided map"
+        )]
+        clear_missing: bool,
+    },
+    #[schemars(description = "Return all instances that currently have the requested tag")]
+    QueryByTag {
+        #[schemars(description = "CollectionService tag that should be queried")]
+        tag: String,
+        #[serde(default)]
+        #[schemars(
+            description = "Include Instance:GetAttributes() output for each tagged instance"
+        )]
+        include_attributes: bool,
+        #[serde(default)]
+        #[schemars(description = "Include Instance path segments for each tagged instance")]
+        include_paths: bool,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CollectionAndAttributesOperationResult {
+    #[schemars(description = "Index of the processed operation within the request array")]
+    index: usize,
+    #[schemars(description = "Identifier of the executed operation")]
+    operation: String,
+    #[schemars(description = "True when the operation completed successfully")]
+    success: bool,
+    #[serde(default)]
+    #[schemars(description = "Optional message describing the outcome of the operation")]
+    message: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Structured details describing the per-instance outcome")]
+    details: Option<JsonValue>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CollectionAndAttributesResponse {
+    #[schemars(description = "Per-operation results describing the batch execution")]
+    results: Vec<CollectionAndAttributesOperationResult>,
+    #[serde(default)]
+    #[schemars(description = "Optional human readable summary of the batch")]
+    summary: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "True when at least one operation mutated tags or attributes")]
+    write_occurred: bool,
+    #[serde(default)]
+    #[schemars(description = "Count of instances that were modified during the batch")]
+    affected_instances: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(tag = "tool", content = "params")]
 enum ToolArgumentValues {
     RunCode(RunCode),
@@ -866,6 +960,7 @@ enum ToolArgumentValues {
     TestAndPlayControl(TestAndPlayControl),
     TerrainOperations(TerrainOperationsRequest),
     AssetPipeline(AssetPipelineRequest),
+    CollectionAndAttributes(CollectionAndAttributesRequest),
     DiagnosticsAndMetrics(DiagnosticsAndMetricsRequest),
 }
 #[tool_router]
@@ -962,6 +1057,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<AssetPipelineRequest>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::AssetPipeline(args))
+            .await
+    }
+
+    #[tool(
+        description = "Manages CollectionService tags and instance attributes, supporting list_tags, add_tags, remove_tags, sync_attributes, and query_by_tag."
+    )]
+    async fn collection_and_attributes(
+        &self,
+        Parameters(args): Parameters<CollectionAndAttributesRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::CollectionAndAttributes(args))
             .await
     }
 
