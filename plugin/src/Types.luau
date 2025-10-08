@@ -344,7 +344,7 @@ export type ManageScriptOperationResult = {
         message: string?,
         source: string?,
         metadata: ScriptMetadata?,
-        details: { [string]: any }?,
+        details: { [string]: any }?, -- e.g. characters, previousCharacters, parentFullName, previousPath
         diagnostics: { ScriptDiagnostic }?,
 }
 

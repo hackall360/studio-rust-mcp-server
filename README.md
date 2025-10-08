@@ -508,4 +508,7 @@ The resulting tool call looks like:
 
 Studio replies with a JSON payload that summarises each operation, echoes the requested metadata, and
 provides diagnostics (such as syntax errors) whenever a change is rejected. That makes it easy to keep
-Claude/Cursor in the loop while iteratively refining gameplay scripts.
+Claude/Cursor in the loop while iteratively refining gameplay scripts. LocalScripts are guarded from
+being created under server-only containers, and server Scripts are kept out of client-only parents so
+the plugin will fail fast with a readable diagnostic instead of leaving the instance in an unusable
+state.
