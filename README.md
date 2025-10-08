@@ -219,6 +219,70 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
       }
     }
     ```
+- **`physics_and_navigation`** – Coordinate collision group authoring with navigation queries in a
+  single request. The tool understands four operation types that can be mixed in one batch:
+  - `create_collision_group` creates or replaces a group and can immediately toggle its active state.
+    Roblox only tracks collision behaviour for BaseParts, so ensure any `assign_part_to_group` paths
+    resolve to BasePart descendants. When `replaceExisting` is true the plugin removes the previous
+    group via `RemoveCollisionGroup` before creating it again.
+  - `set_collision_enabled` flips the collidable relationship between two groups and can optionally
+    activate or deactivate them in the same step.
+  - `assign_part_to_group` resolves a single instance path and calls
+    `PhysicsService:SetPartCollisionGroup`. Non-part instances return a structured diagnostic showing
+    the resolved class and normalised path.
+  - `compute_path` uses `PathfindingService:CreatePath` and `ComputeAsync` to return waypoint arrays,
+    the path status, and whether the solver detected a blockage. Positions are specified as JSON
+    objects with `x`, `y`, and `z` fields expressed in studs.
+  - **Prerequisites**: Collision groups must exist before assignment, and parts referenced in
+    operations must already be present in the DataModel. Navigation queries require world-space
+    coordinates; the tool reports `PathStatus` strings and keeps the path read-only (`writeOccurred`
+    remains `false`).
+  - Example collision authoring prompt:
+
+    ```json
+    {
+      "tool": "PhysicsAndNavigation",
+      "params": {
+        "operations": [
+          {
+            "operation": "create_collision_group",
+            "groupName": "NPCs",
+            "replaceExisting": true,
+            "active": true
+          },
+          {
+            "operation": "set_collision_enabled",
+            "groupA": "NPCs",
+            "groupB": "Environment",
+            "collidable": false
+          },
+          {
+            "operation": "assign_part_to_group",
+            "path": ["Workspace", "Obstacles", "Door"],
+            "groupName": "Environment"
+          }
+        ]
+      }
+    }
+    ```
+
+  - Example pathfinding prompt:
+
+    ```json
+    {
+      "tool": "PhysicsAndNavigation",
+      "params": {
+        "operations": [
+          {
+            "operation": "compute_path",
+            "startPosition": { "x": 0, "y": 5, "z": 0 },
+            "targetPosition": { "x": 150, "y": 5, "z": -120 },
+            "agentParameters": { "agentRadius": 4, "agentCanJump": true }
+          }
+        ]
+      }
+    }
+    ```
 - **`manage_scripts`** – Scaffold and maintain `Script`, `LocalScript`, and `ModuleScript`
   instances. Combine `create`, `get_source`, `set_source`, and `rename` operations in a single
   request to build new automation, retrieve existing code, or apply edits. Each operation works with
