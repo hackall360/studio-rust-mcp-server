@@ -617,6 +617,91 @@ enum ScriptType {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(default, rename_all = "camelCase")]
+struct DiagnosticsLogOptions {
+    #[schemars(description = "Include log entries with error severity")]
+    include_errors: bool,
+    #[schemars(description = "Include log entries with warning severity")]
+    include_warnings: bool,
+    #[schemars(description = "Include informational log entries in the response")]
+    include_info: bool,
+    #[serde(default)]
+    #[schemars(description = "Maximum number of log entries to return (most recent first)")]
+    max_entries: Option<u32>,
+    #[serde(default)]
+    #[schemars(description = "Maximum number of log entries per chunk in the response")]
+    chunk_size: Option<u32>,
+}
+
+impl Default for DiagnosticsLogOptions {
+    fn default() -> Self {
+        Self {
+            include_errors: true,
+            include_warnings: true,
+            include_info: false,
+            max_entries: Some(200),
+            chunk_size: Some(100),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(default, rename_all = "camelCase")]
+struct DiagnosticsServiceSelection {
+    #[schemars(description = "Services to inspect for metrics and descendant counts")]
+    services: Vec<String>,
+    #[schemars(description = "Include descendant counts for each requested service")]
+    include_descendant_counts: bool,
+    #[schemars(description = "Include memory tag usage when available for the requested services")]
+    include_memory_tags: bool,
+}
+
+impl Default for DiagnosticsServiceSelection {
+    fn default() -> Self {
+        Self {
+            services: vec![
+                "Workspace".to_string(),
+                "Players".to_string(),
+                "Lighting".to_string(),
+                "ReplicatedStorage".to_string(),
+                "ServerScriptService".to_string(),
+            ],
+            include_descendant_counts: true,
+            include_memory_tags: true,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(default, rename_all = "camelCase")]
+struct DiagnosticsAndMetricsRequest {
+    #[serde(default)]
+    #[schemars(description = "Configuration for collecting recent log history")]
+    logs: Option<DiagnosticsLogOptions>,
+    #[schemars(description = "Include a microprofiler snapshot when permissions allow")]
+    include_micro_profiler: bool,
+    #[schemars(description = "Collect overall memory statistics for the current Studio session")]
+    include_memory_stats: bool,
+    #[schemars(description = "Collect task scheduler metrics when available")]
+    include_task_scheduler: bool,
+    #[serde(default)]
+    #[schemars(description = "Selection of services to gather metrics for")]
+    service_selection: Option<DiagnosticsServiceSelection>,
+}
+
+impl Default for DiagnosticsAndMetricsRequest {
+    fn default() -> Self {
+        Self {
+            logs: Some(DiagnosticsLogOptions::default()),
+            include_micro_profiler: false,
+            include_memory_stats: true,
+            include_task_scheduler: true,
+            service_selection: Some(DiagnosticsServiceSelection::default()),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(tag = "tool", content = "params")]
 enum ToolArgumentValues {
     RunCode(RunCode),
@@ -626,6 +711,7 @@ enum ToolArgumentValues {
     ManageScripts(ManageScriptsRequest),
     TestAndPlayControl(TestAndPlayControl),
     AssetPipeline(AssetPipelineRequest),
+    DiagnosticsAndMetrics(DiagnosticsAndMetricsRequest),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -710,6 +796,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<AssetPipelineRequest>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::AssetPipeline(args))
+            .await
+    }
+
+    #[tool(
+        description = "Collects diagnostics such as recent error logs, memory usage, microprofiler dumps, and scheduler stats."
+    )]
+    async fn diagnostics_and_metrics(
+        &self,
+        Parameters(args): Parameters<DiagnosticsAndMetricsRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::DiagnosticsAndMetrics(args))
             .await
     }
 
