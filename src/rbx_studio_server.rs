@@ -317,6 +317,80 @@ struct ManageScriptsResponse {
     summary: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EditorSessionControlRequest {
+    #[schemars(
+        description = "Action that should be executed against the current Studio editor session"
+    )]
+    action: EditorSessionControlAction,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "action", rename_all = "snake_case")]
+enum EditorSessionControlAction {
+    #[schemars(
+        description = "Replace the current Studio selection with the provided instance paths"
+    )]
+    SetSelection {
+        #[schemars(description = "Array of instance paths that will be selected in Studio")]
+        paths: Vec<Vec<String>>,
+    },
+    #[schemars(description = "Apply camera transforms such as CFrame, Focus, or FieldOfView")]
+    FocusCamera {
+        #[serde(default)]
+        #[schemars(description = "Optional Camera.CFrame components (12 numbers) to apply")]
+        cframe_components: Option<[f64; 12]>,
+        #[serde(default)]
+        #[schemars(description = "Optional Camera.Focus components (12 numbers) to apply")]
+        focus_components: Option<[f64; 12]>,
+        #[serde(default)]
+        #[schemars(description = "Optional camera field of view in degrees")]
+        field_of_view: Option<f64>,
+    },
+    #[schemars(description = "Frame one or more instances within the viewport camera")]
+    FrameInstances {
+        #[schemars(description = "Instance paths that should be framed by the camera")]
+        paths: Vec<Vec<String>>,
+        #[serde(default)]
+        #[schemars(description = "Optional tween duration in seconds when moving the camera")]
+        tween_seconds: Option<f64>,
+    },
+    #[schemars(
+        description = "Open a script in Studio, optionally focusing a specific line or column"
+    )]
+    OpenScript {
+        #[schemars(
+            description = "Instance path resolving to the target Script/LocalScript/ModuleScript"
+        )]
+        path: Vec<String>,
+        #[serde(default)]
+        #[schemars(description = "Optional 1-indexed line number to focus in the opened script")]
+        line: Option<u32>,
+        #[serde(default)]
+        #[schemars(description = "Optional 1-indexed column number to focus in the opened script")]
+        column: Option<u32>,
+        #[serde(default)]
+        #[schemars(description = "Request that Studio focus the opened script tab when supported")]
+        focus: Option<bool>,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EditorSessionControlResponse {
+    #[schemars(description = "Identifier of the executed action")]
+    action: String,
+    #[schemars(description = "True when the editor session control action succeeded")]
+    success: bool,
+    #[serde(default)]
+    #[schemars(description = "Optional message that summarises the action outcome")]
+    message: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Number of instances affected by the action, when applicable")]
+    affected_instances: Option<usize>,
+}
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
 #[serde(rename_all = "snake_case")]
 enum TerrainPivotMode {
@@ -961,6 +1035,7 @@ enum ToolArgumentValues {
     ApplyInstanceOperations(ApplyInstanceOperationsRequest),
     ManageScripts(ManageScriptsRequest),
     TestAndPlayControl(TestAndPlayControl),
+    EditorSessionControl(EditorSessionControlRequest),
     TerrainOperations(TerrainOperationsRequest),
     AssetPipeline(AssetPipelineRequest),
     CollectionAndAttributes(CollectionAndAttributesRequest),
@@ -1038,6 +1113,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<TestAndPlayControl>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::TestAndPlayControl(args))
+            .await
+    }
+
+    #[tool(
+        description = "Controls editor session state such as selection, camera transforms, framing, and opening scripts."
+    )]
+    async fn editor_session_control(
+        &self,
+        Parameters(args): Parameters<EditorSessionControlRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::EditorSessionControl(args))
             .await
     }
 

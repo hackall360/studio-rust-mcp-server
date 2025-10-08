@@ -136,6 +136,14 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
   The `stop` subcommand issues best-effort shutdown requests for any active play or test run. Each
   response is encoded as JSON so MCP clients can inspect structured fields such as
   `statusUpdates`, `summary`, `chunks`, and `logs`.
+- **`editor_session_control`** – Issue focused Studio editor commands without touching the DataModel.
+  The tool accepts an action discriminator alongside structured payloads:
+  - `set_selection`: Replace the Explorer selection with arrays of instance path segments.
+  - `focus_camera`: Apply explicit `Camera.CFrame`, `Camera.Focus`, or `FieldOfView` component arrays.
+  - `frame_instances`: Resolve instance paths, compute a bounding box, and move the camera (optionally
+    tweening) so the targets fill the viewport.
+  - `open_script`: Open a `Script`/`LocalScript`/`ModuleScript`, optionally jumping to a specific
+    `line`/`column` and focusing the editor tab.
 - **`asset_pipeline`** – Search the marketplace, insert specific asset versions, import local RBXM
   files, and publish packages without leaving Claude or Cursor. Each operation reports structured
   status including resolved instance paths, collision handling decisions, placement adjustments, and

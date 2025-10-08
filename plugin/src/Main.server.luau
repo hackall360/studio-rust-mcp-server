@@ -39,6 +39,7 @@ local function shouldRecordHistoryForRequest(args: Types.ToolArgs): boolean
                 or args.tool == "DiagnosticsAndMetrics"
                 or args.tool == "ApplyInstanceOperations"
                 or args.tool == "TestAndPlayControl"
+                or args.tool == "EditorSessionControl"
         then
                 return false
         end
