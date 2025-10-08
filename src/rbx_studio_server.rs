@@ -786,7 +786,7 @@ struct DiagnosticsLogOptions {
     #[schemars(description = "Maximum number of log entries to return (most recent first)")]
     max_entries: Option<u32>,
     #[serde(default)]
-    #[schemars(description = "Maximum number of log entries per chunk in the response")]
+    #[schemars(description = "Maximum number of log entries per chunk in the response payload")]
     chunk_size: Option<u32>,
 }
 
@@ -1075,7 +1075,7 @@ impl RBXStudioServer {
     }
 
     #[tool(
-        description = "Collects diagnostics such as recent error logs, memory usage, microprofiler dumps, and scheduler stats."
+        description = "Collects diagnostics such as recent log history (chunked), memory usage, optional microprofiler dumps, and scheduler stats."
     )]
     async fn diagnostics_and_metrics(
         &self,
