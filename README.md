@@ -155,10 +155,17 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
   are missing from the request. The response includes JSON summaries with `writeOccurred` and
   `affectedInstances` fields so you can condition undo checkpoints on whether anything actually
   changed.
-- **`diagnostics_and_metrics`** – Gather troubleshooting data from Studio in a single response. The
-  tool can stream recent error and warning logs in timestamped chunks, capture memory usage
-  (including DeveloperMemoryTag breakdowns), summarise TaskScheduler and service health, and
-  optionally return a MicroProfiler snapshot when you have diagnostics permissions enabled.
+- **`diagnostics_and_metrics`** – Gather troubleshooting data from Studio in a single response.
+  Combine multiple insights in one call:
+  - `logs`: Filter error, warning, or informational messages, cap the total returned entries, and
+    control how many items appear in each chunk so LLMs can page through long histories. Responses
+    include severity tallies as well as the oldest/newest timestamps that survived truncation.
+  - `includeMemoryStats`: Summarise `Stats` memory usage (total + DeveloperMemoryTag breakdowns).
+  - `includeTaskScheduler`: Surface scheduler state/metrics when Roblox exposes them in Studio.
+  - `includeMicroProfiler`: Emit a MicroProfiler dump (chunked when large) for deeper CPU analysis.
+  - `serviceSelection`: Inspect specific services for descendant counts and relevant memory tags.
+  The payload is encoded as JSON so MCP clients can slice out sections such as
+  `logs.chunks[n].entries`, `logs.severityCounts`, or `services.Workspace.memoryUsageMb`.
 
 > **Safety notice:** Starting a play session or running the test harness will execute scripts and
 > may mutate workspace state that has not been saved. Ensure critical changes are committed to
@@ -402,24 +409,41 @@ Summarize any skips or errors in the response.
 
 ### Requesting diagnostics
 
-The `diagnostics_and_metrics` tool accepts a payload that lets you tailor what Studio collects. For
-example:
+The `diagnostics_and_metrics` tool accepts a `tool` + `params` payload so you can cherry-pick which
+subsystems to inspect:
 
 ```
 {
-  "logs": { "maxEntries": 120, "chunkSize": 40 },
-  "includeMemoryStats": true,
-  "includeTaskScheduler": true,
-  "includeMicroProfiler": false,
-  "serviceSelection": { "services": ["Workspace", "Players"] }
+  "tool": "DiagnosticsAndMetrics",
+  "params": {
+    "logs": {
+      "includeErrors": true,
+      "includeWarnings": true,
+      "includeInfo": false,
+      "maxEntries": 120,
+      "chunkSize": 40
+    },
+    "includeMemoryStats": true,
+    "includeTaskScheduler": true,
+    "includeMicroProfiler": true,
+    "serviceSelection": {
+      "services": ["Workspace", "Players"],
+      "includeDescendantCounts": true,
+      "includeMemoryTags": true
+    }
+  }
 }
 ```
 
-Set `includeMicroProfiler` to `true` only after enabling the MicroProfiler in Studio (View →
-MicroProfiler or File → Studio Settings → Diagnostics → Allow MicroProfiler). Roblox requires that
-permission to be granted per-user; without it the tool will return a note explaining that the dump
-is unavailable. Error and warning logs are chunked for long sessions so MCP clients can page through
-them without hitting token limits.
+Log history comes back in `logs.chunks` with severity, timestamps, and an aggregate
+`logs.severityCounts` table so your prompt can prioritise the noisy areas. The wrapper also records
+`logs.oldestTimestamp`/`logs.newestTimestamp` so you know what window of time was captured. Large outputs are
+automatically chunked to avoid exhausting context windows, and each chunk is annotated with the
+index of the entries it covers. When `includeMicroProfiler` is `true`, Studio attempts to capture a
+microprofiler dump; the response contains a `snapshot` for small captures or `chunks` plus
+`snapshotSize` for larger traces. Enable the MicroProfiler first (View → MicroProfiler or File →
+Studio Settings → Diagnostics → Allow MicroProfiler) and ensure your account has permission to view
+it—otherwise Roblox will return an `available = false` section explaining the denial.
 
 To run the automated test suite from Claude or Cursor, you can request:
 

@@ -20,6 +20,27 @@ local MEMORY_TAG_OVERRIDES: { [string]: string } = {
         StarterPack = "StarterPack",
 }
 
+local MICROPROFILER_CHUNK_SIZE = 200000
+
+local function chunkText(text: string, chunkSize: number)
+        local chunks = {}
+        local length = #text
+        local index = 1
+        local chunkIndex = 1
+        while index <= length do
+                local upper = math.min(index + chunkSize - 1, length)
+                table.insert(chunks, {
+                        index = chunkIndex,
+                        startByte = index,
+                        endByte = upper,
+                        data = string.sub(text, index, upper),
+                })
+                index = upper + 1
+                chunkIndex += 1
+        end
+        return chunks
+end
+
 local function boolDefault(value: any, fallback: boolean): boolean
         if type(value) == "boolean" then
                 return value
@@ -87,6 +108,7 @@ local function gatherLogHistory(options: Types.DiagnosticsLogOptions?): { [strin
         end
 
         local chunkSize = numberDefault(resolved.chunkSize, 100, 1)
+        chunkSize = math.max(math.floor(chunkSize), 1)
 
         local ok, history = pcall(LogService.GetLogHistory, LogService)
         if not ok or type(history) ~= "table" then
@@ -129,10 +151,30 @@ local function gatherLogHistory(options: Types.DiagnosticsLogOptions?): { [strin
                 filtered = trimmed
         end
 
+        local severityCounts = {
+                error = 0,
+                warning = 0,
+                info = 0,
+        }
+        local oldestTimestamp: string? = nil
+        local newestTimestamp: string? = nil
+        for _, entry in filtered do
+                local severity = entry.severity
+                severityCounts[severity] = (severityCounts[severity] or 0) + 1
+                local timestamp = entry.timestamp
+                if timestamp ~= nil then
+                        if oldestTimestamp == nil then
+                                oldestTimestamp = timestamp
+                        end
+                        newestTimestamp = timestamp
+                end
+        end
+
         local chunks = {}
         local index = 1
         local chunkIndex = 1
         while index <= #filtered do
+                local chunkStart = index
                 local chunk = {}
                 local upper = math.min(index + chunkSize - 1, #filtered)
                 for i = index, upper do
@@ -140,6 +182,8 @@ local function gatherLogHistory(options: Types.DiagnosticsLogOptions?): { [strin
                 end
                 table.insert(chunks, {
                         index = chunkIndex,
+                        startEntry = chunkStart,
+                        endEntry = upper,
                         entries = chunk,
                 })
                 index = upper + 1
@@ -147,11 +191,15 @@ local function gatherLogHistory(options: Types.DiagnosticsLogOptions?): { [strin
         end
 
         return {
-                        available = true,
-                        totalEntries = #filtered,
-                        chunkSize = chunkSize,
-                        truncated = truncated,
-                        chunks = chunks,
+                available = true,
+                totalEntries = #filtered,
+                totalChunks = #chunks,
+                chunkSize = chunkSize,
+                truncated = truncated,
+                severityCounts = severityCounts,
+                oldestTimestamp = oldestTimestamp,
+                newestTimestamp = newestTimestamp,
+                chunks = chunks,
         }
 end
 
@@ -272,27 +320,38 @@ end
 
 local function gatherMicroProfiler(includeMicroProfiler: boolean?): { [string]: any }?
         if not boolDefault(includeMicroProfiler, false) then
-                        return nil
+                return nil
         end
 
         local okDump, dump = pcall(LogService.GetMicroProfilerDump, LogService)
         if not okDump then
-                        return {
-                                available = false,
-                                reason = tostring(dump),
-                        }
+                return {
+                        available = false,
+                        reason = tostring(dump),
+                }
         end
 
         if type(dump) == "string" then
+                local snapshotSize = #dump
+                if snapshotSize <= MICROPROFILER_CHUNK_SIZE then
                         return {
                                 available = true,
                                 snapshot = dump,
+                                snapshotSize = snapshotSize,
                         }
+                end
+                local chunks = chunkText(dump, MICROPROFILER_CHUNK_SIZE)
+                return {
+                        available = true,
+                        snapshotSize = snapshotSize,
+                        chunkSize = MICROPROFILER_CHUNK_SIZE,
+                        chunks = chunks,
+                }
         end
 
         return {
-                        available = false,
-                        reason = "Microprofiler dump unavailable or unsupported",
+                available = false,
+                reason = "Microprofiler dump unavailable or unsupported",
         }
 end
 
