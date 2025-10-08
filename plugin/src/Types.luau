@@ -159,6 +159,26 @@ export type ManageScriptsToolArgs = {
         params: ManageScriptsArgs,
 }
 
+export type TestAndPlayAction = "play_solo" | "stop" | "run_tests" | "run_playtest"
+
+export type TestAndPlayControlOptions = {
+        timeoutSeconds: number?,
+        pollIntervalSeconds: number?,
+        testNames: { string }?,
+        runAsync: boolean?,
+        includeLogHistory: boolean?,
+}
+
+export type TestAndPlayControlArgs = {
+        action: TestAndPlayAction,
+        options: TestAndPlayControlOptions?,
+}
+
+export type TestAndPlayControlToolArgs = {
+        tool: "TestAndPlayControl",
+        params: TestAndPlayControlArgs,
+}
+
 export type ToolFunction = (ToolArgs) -> string?
 
 return {}
