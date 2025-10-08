@@ -147,6 +147,14 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
   the resolved pivots, and any failures. Optional `pivotRelative` flags combine with
   `pivot = { mode = "active_camera", offset = { dx, dy, dz } }` to position edits in front of the
   viewport, making it easy to paint terrain relative to the current shot.
+- **`collection_and_attributes`** – Manage CollectionService metadata alongside Instance attributes.
+  Chain `list_tags`, `add_tags`, `remove_tags`, `sync_attributes`, and `query_by_tag` operations to audit
+  or mutate large sets of instances. Tag operations accept arrays of instance paths and tag strings,
+  automatically skip duplicates, and report per-instance outcomes. Attribute syncs accept key/value
+  maps (numbers, strings, booleans, Color3 dictionaries, etc.) and optionally prune attributes that
+  are missing from the request. The response includes JSON summaries with `writeOccurred` and
+  `affectedInstances` fields so you can condition undo checkpoints on whether anything actually
+  changed.
 - **`diagnostics_and_metrics`** – Gather troubleshooting data from Studio in a single response. The
   tool can stream recent error and warning logs in timestamped chunks, capture memory usage
   (including DeveloperMemoryTag breakdowns), summarise TaskScheduler and service health, and
@@ -197,6 +205,68 @@ history. Terrain edits still modify live data; save frequently, keep backups bef
 operations, and double-check the resolved coordinates (reported in the `details` field) before
 running destructive actions such as `clear_region`.
 
+### Tag and attribute workflows
+
+Use `collection_and_attributes` when you want to inspect or mutate CollectionService tags and
+Instance attributes in bulk. Operations accept arrays of instance paths, tag strings, and attribute
+maps, and they produce structured JSON summaries that call out per-instance successes, skips, or
+errors. A typical request might look like:
+
+```json
+{
+  "tool": "CollectionAndAttributes",
+  "params": {
+    "operations": [
+      {
+        "operation": "list_tags",
+        "paths": [
+          ["Workspace", "NPCs", "Guard"],
+          ["Workspace", "NPCs", "Merchant"]
+        ],
+        "includeAttributes": true
+      },
+      {
+        "operation": "add_tags",
+        "paths": [["Workspace", "NPCs", "Guard"]],
+        "tags": ["npc", "guard", "vendor"]
+      },
+      {
+        "operation": "sync_attributes",
+        "paths": [["Workspace", "NPCs", "Guard"]],
+        "attributes": {
+          "Level": 12,
+          "Faction": "CityWatch",
+          "PatrolRadius": 48
+        }
+      },
+      {
+        "operation": "query_by_tag",
+        "tag": "vendor",
+        "includePaths": true,
+        "includeAttributes": true
+      }
+    ]
+  }
+}
+```
+
+Best practices when working with tags and attributes:
+
+- **Adopt consistent naming.** Prefer lowercase, hyphenated tags (`npc-guard`) or scoped prefixes
+  (`quest.giver`) so collaborators can scan related metadata quickly.
+- **Reserve tags for membership, attributes for data.** Tags should answer yes/no questions ("is this
+  an interactable?") while attributes store numbers, strings, or booleans that scripts consume.
+- **Keep attribute types predictable.** Stick to primitives and common Roblox datatypes (Color3, CFrame
+  arrays, Vector3 dictionaries). Mixing types under the same key makes scripted consumers brittle.
+- **Prune stale metadata deliberately.** Set `clearMissing = true` on `sync_attributes` when you want
+  the plugin to remove attributes that are no longer present in your source of truth.
+- **Audit before bulk edits.** Chain `list_tags` before mutating operations so the response clearly
+  shows what changed and lets you catch typos before they propagate.
+
+Because the response reports `writeOccurred` and `affectedInstances`, the Studio plugin only commits a
+ChangeHistory checkpoint when at least one instance was updated. Read-only batches (for example, only
+`list_tags` or `query_by_tag`) avoid polluting the undo stack.
+
 ### Example prompts
 
 You can ask Claude or Cursor to stage multiple changes at once. For example, the following prompt
@@ -207,6 +277,17 @@ Use apply_instance_operations to:
 1. Create a PointLight at Workspace/LightingRig/PointLight with Brightness 3 and Range 18.
 2. Update Workspace/SetPiece/SpotlightCube so its Color is (1, 0.8, 0.6) and Transparency is 0.25.
 3. Delete Workspace/Temporary/DebugFolder.
+```
+
+To label a group of instances and synchronise designer-authored metadata, try a prompt like:
+
+```
+Use collection_and_attributes to:
+1. list_tags for Workspace/Levels/Hub/MerchantStand and Workspace/Levels/Hub/Blacksmith with attributes.
+2. add_tags to those same paths with ["shop", "hub-service"].
+3. sync_attributes on Workspace/Levels/Hub/MerchantStand with { "OpensAt": 6, "ClosesAt": 22, "Currency": "Gold" } and clearMissing true.
+4. query_by_tag for "hub-service" including paths and attributes.
+Summarize any skips or errors in the response.
 ```
 
 ### Requesting diagnostics

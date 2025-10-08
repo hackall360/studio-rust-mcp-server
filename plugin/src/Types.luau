@@ -133,6 +133,66 @@ export type TerrainOperationsResponse = {
 
 export type InstancePath = { string }
 
+export type AttributeMap = { [string]: any }
+
+export type CollectionListTagsOperation = {
+        operation: "list_tags",
+        paths: { InstancePath },
+        includeAttributes: boolean?,
+}
+
+export type CollectionAddTagsOperation = {
+        operation: "add_tags",
+        paths: { InstancePath },
+        tags: { string },
+}
+
+export type CollectionRemoveTagsOperation = {
+        operation: "remove_tags",
+        paths: { InstancePath },
+        tags: { string },
+}
+
+export type CollectionSyncAttributesOperation = {
+        operation: "sync_attributes",
+        paths: { InstancePath },
+        attributes: AttributeMap,
+        clearMissing: boolean?,
+}
+
+export type CollectionQueryByTagOperation = {
+        operation: "query_by_tag",
+        tag: string,
+        includeAttributes: boolean?,
+        includePaths: boolean?,
+}
+
+export type CollectionAndAttributesOperation =
+        CollectionListTagsOperation
+        | CollectionAddTagsOperation
+        | CollectionRemoveTagsOperation
+        | CollectionSyncAttributesOperation
+        | CollectionQueryByTagOperation
+
+export type CollectionAndAttributesRequest = {
+        operations: { CollectionAndAttributesOperation },
+}
+
+export type CollectionAndAttributesOperationResult = {
+        index: number,
+        operation: "list_tags" | "add_tags" | "remove_tags" | "sync_attributes" | "query_by_tag",
+        success: boolean,
+        message: string?,
+        details: { [string]: any }?,
+}
+
+export type CollectionAndAttributesResponse = {
+        results: { CollectionAndAttributesOperationResult },
+        summary: string?,
+        writeOccurred: boolean,
+        affectedInstances: number?,
+}
+
 export type InstanceOperationAction = "create" | "update" | "delete"
 
 export type PropertyMap = { [string]: any }
@@ -259,6 +319,11 @@ export type DiagnosticsAndMetricsToolArgs = {
 export type TerrainOperationsToolArgs = {
         tool: "TerrainOperations",
         params: TerrainOperationsRequest,
+}
+
+export type CollectionAndAttributesToolArgs = {
+        tool: "CollectionAndAttributes",
+        params: CollectionAndAttributesRequest,
 }
 
 export type ApplyInstanceOperationsToolArgs = {
