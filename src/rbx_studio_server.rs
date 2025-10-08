@@ -101,11 +101,86 @@ struct InsertModel {
     query: String,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_service_list() -> Vec<String> {
+    vec![
+        "Workspace".to_string(),
+        "Players".to_string(),
+        "Lighting".to_string(),
+        "ReplicatedStorage".to_string(),
+        "ServerScriptService".to_string(),
+        "StarterGui".to_string(),
+    ]
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct InspectSelectionScope {
+    #[serde(default = "default_true")]
+    #[schemars(description = "Include instance names in the response")]
+    include_names: bool,
+    #[serde(default = "default_true")]
+    #[schemars(description = "Include ClassName metadata in the response")]
+    include_class_names: bool,
+    #[serde(default = "default_true")]
+    #[schemars(description = "Include Instance:GetFullName() in the response")]
+    include_full_names: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct InspectCameraScope {
+    #[serde(default = "default_true")]
+    #[schemars(description = "Include the camera CFrame vectors")]
+    include_cframe: bool,
+    #[serde(default = "default_true")]
+    #[schemars(description = "Include the camera focus CFrame vectors")]
+    include_focus: bool,
+    #[serde(default = "default_true")]
+    #[schemars(description = "Include the camera field of view")]
+    include_field_of_view: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct InspectServicesScope {
+    #[serde(default = "default_true")]
+    #[schemars(description = "Include descendant counts for each requested service")]
+    include_counts: bool,
+    #[serde(default = "default_service_list")]
+    #[schemars(description = "Specific services to inspect; defaults to common Roblox services")]
+    services: Vec<String>,
+}
+
+impl Default for InspectServicesScope {
+    fn default() -> Self {
+        Self {
+            include_counts: default_true(),
+            services: default_service_list(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct InspectEnvironment {
+    #[schemars(description = "Selection inspection options")]
+    selection: Option<InspectSelectionScope>,
+    #[schemars(description = "Camera inspection options")]
+    camera: Option<InspectCameraScope>,
+    #[schemars(description = "Service inspection options")]
+    services: Option<InspectServicesScope>,
+}
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(tag = "tool", content = "params")]
 enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
+    InspectEnvironment(InspectEnvironment),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -135,6 +210,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InsertModel>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InsertModel(args))
+            .await
+    }
+
+    #[tool(
+        description = "Inspects the current Studio environment and returns JSON summarising selection, camera and service state."
+    )]
+    async fn inspect_environment(
+        &self,
+        Parameters(args): Parameters<InspectEnvironment>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::InspectEnvironment(args))
             .await
     }
 
