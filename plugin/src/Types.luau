@@ -179,6 +179,89 @@ export type TestAndPlayControlToolArgs = {
         params: TestAndPlayControlArgs,
 }
 
+export type AssetCollisionStrategy = "rename" | "overwrite" | "skip"
+
+export type AssetPlacementMode = "camera" | "origin" | "preserve" | "custom_cframe"
+
+export type AssetPlacementOptions = {
+        mode: AssetPlacementMode,
+        cframeComponents: { number }?,
+}
+
+export type PackagePublishRequest = {
+        packageName: string,
+        description: string?,
+        groupId: number?,
+        allowOverwrite: boolean?,
+        allowComments: boolean?,
+        tags: { string }?,
+}
+
+export type AssetPipelineSearchMarketplace = {
+        action: "search_marketplace",
+        query: string,
+        limit: number?,
+        creatorName: string?,
+}
+
+export type AssetPipelineInsertAssetVersion = {
+        action: "insert_asset_version",
+        assetId: number?,
+        assetVersionId: number,
+        desiredName: string?,
+        targetParentPath: InstancePath?,
+        collisionStrategy: AssetCollisionStrategy?,
+        placement: AssetPlacementOptions?,
+        saveAsPackage: PackagePublishRequest?,
+}
+
+export type AssetPipelineImportRbxm = {
+        action: "import_rbxm",
+        filePath: string,
+        desiredName: string?,
+        targetParentPath: InstancePath?,
+        collisionStrategy: AssetCollisionStrategy?,
+        placement: AssetPlacementOptions?,
+        saveAsPackage: PackagePublishRequest?,
+}
+
+export type AssetPipelinePublishPackage = {
+        action: "publish_package",
+        instancePath: InstancePath,
+        publish: PackagePublishRequest,
+}
+
+export type AssetPipelineOperation =
+        AssetPipelineSearchMarketplace
+        | AssetPipelineInsertAssetVersion
+        | AssetPipelineImportRbxm
+        | AssetPipelinePublishPackage
+
+export type AssetPipelineRequest = {
+        operations: { AssetPipelineOperation },
+        defaultParentPath: InstancePath?,
+        defaultCollisionStrategy: AssetCollisionStrategy?,
+        defaultPlacement: AssetPlacementOptions?,
+}
+
+export type AssetPipelineOperationResult = {
+        action: "search_marketplace" | "insert_asset_version" | "import_rbxm" | "publish_package",
+        success: boolean,
+        status: string,
+        message: string?,
+        details: { [string]: any }?,
+}
+
+export type AssetPipelineResponse = {
+        results: { AssetPipelineOperationResult },
+        summary: string?,
+}
+
+export type AssetPipelineToolArgs = {
+        tool: "AssetPipeline",
+        params: AssetPipelineRequest,
+}
+
 export type ToolFunction = (ToolArgs) -> string?
 
 return {}

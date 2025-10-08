@@ -136,6 +136,10 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
   The `stop` subcommand issues best-effort shutdown requests for any active play or test run. Each
   response is encoded as JSON so MCP clients can inspect structured fields such as
   `statusUpdates`, `summary`, `chunks`, and `logs`.
+- **`asset_pipeline`** – Search the marketplace, insert specific asset versions, import local RBXM
+  files, and publish packages without leaving Claude or Cursor. Each operation reports structured
+  status including resolved instance paths, collision handling decisions, placement adjustments, and
+  optional package metadata.
 
 > **Safety notice:** Starting a play session or running the test harness will execute scripts and
 > may mutate workspace state that has not been saved. Ensure critical changes are committed to
@@ -197,6 +201,57 @@ To run the automated test suite from Claude or Cursor, you can request:
 ```
 Use test_and_play_control to run_tests with a 90 second timeout and include the full log history.
 If any tests fail, summarize the failing cases in the response.
+```
+
+## Asset pipeline workflows
+
+The `asset_pipeline` tool extends the plugin with a suite of asset-centric operations that execute in
+sequence. Each operation runs inside a single ChangeHistory checkpoint and produces a JSON response
+containing a `results` array with per-step status, messages, and structured `details` objects.
+
+### Prerequisites
+
+- You must be signed into Studio with an account that has permission to load the requested asset
+  versions and to publish packages (for example, group upload permissions when targeting a group).
+- Asset publishing requires a Studio build that exposes `AssetService:CreatePackageUpload`. When the
+  API is unavailable, the tool returns a descriptive error without mutating your place.
+- Marketplace insertions respect Studio permissions and may fail when content is moderated or
+  restricted to certain experiences.
+
+### Supported operations
+
+- `search_marketplace` – Query the Roblox marketplace and return asset metadata (name, creator,
+  asset and version IDs). Use `limit` to cap the number of results (default `10`, max `50`).
+- `insert_asset_version` – Load a specific asset version via `InsertService:LoadAssetVersion`, handle
+  naming collisions (`rename`, `overwrite`, or `skip`), place the instance in a target parent, pivot
+  it (`camera`, `origin`, `preserve`, or `custom_cframe`), and optionally publish the inserted
+  instance as a package.
+- `import_rbxm` – Load a local RBXM/RBXLX file via `InsertService:LoadLocalAsset` and apply the same
+  collision, placement, and optional package publishing workflow as marketplace insertions.
+- `publish_package` – Resolve an existing instance by path and publish it as a package using the
+  provided metadata (name, description, tags, group, overwrite/comments flags).
+
+### Example prompts
+
+Ask Claude or Cursor to chain multiple asset operations in one request:
+
+```
+Use asset_pipeline to:
+1. search_marketplace for "modular sci-fi corridor" and limit results to 5 entries.
+2. insert_asset_version with assetVersionId 1234567890 into Workspace/Level using rename collisions
+   and camera placement.
+3. publish_package for the newly inserted instance named "Corridor" with packageName "SciFiCorridor"
+   and allowOverwrite true.
+```
+
+Import from the filesystem and publish immediately:
+
+```
+Use asset_pipeline with defaultParentPath ["ServerStorage", "Imported"] and defaultCollisionStrategy
+"rename" to run:
+- import_rbxm from "C:/Projects/Roblox/Prefabs/ControlPanel.rbxm" placing at origin.
+- publish_package for ["ServerStorage", "Imported", "ControlPanel"] with packageName
+  "ControlPanelPrefab", description "Control room UI elements", allowComments false.
 ```
 
 To verify gameplay flows end-to-end, ask the assistant to playtest and stream logs back:

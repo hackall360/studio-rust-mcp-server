@@ -315,6 +315,183 @@ struct ManageScriptsResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "snake_case")]
+enum AssetCollisionStrategy {
+    #[schemars(description = "Automatically rename the inserted instance to avoid collisions")]
+    Rename,
+    #[schemars(description = "Remove any conflicting instance before insertion")]
+    Overwrite,
+    #[schemars(description = "Skip the operation when a conflicting instance exists")]
+    Skip,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(rename_all = "snake_case")]
+enum AssetPlacementMode {
+    #[default]
+    #[schemars(description = "Keep the original pivot returned by the asset loader")]
+    Preserve,
+    #[schemars(description = "Pivot the instance in front of the active Studio camera")]
+    Camera,
+    #[schemars(description = "Place the instance at the world origin (0, 0, 0)")]
+    Origin,
+    #[schemars(description = "Use a custom CFrame supplied by the caller")]
+    CustomCframe,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct AssetPlacement {
+    #[schemars(description = "Placement strategy for spatially-aware instances")]
+    mode: AssetPlacementMode,
+    #[serde(default)]
+    #[schemars(description = "Twelve-number array describing a CFrame when mode is custom_cframe")]
+    cframe_components: Option<[f64; 12]>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct PackagePublishRequest {
+    #[schemars(description = "Asset name used when publishing the package")]
+    package_name: String,
+    #[serde(default)]
+    #[schemars(description = "Description text to attach to the package upload")]
+    description: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Roblox group ID to publish under when applicable")]
+    group_id: Option<u64>,
+    #[serde(default)]
+    #[schemars(description = "Allow overwriting an existing package asset with the same name")]
+    allow_overwrite: bool,
+    #[serde(default)]
+    #[schemars(description = "Allow comments on the resulting package asset")]
+    allow_comments: bool,
+    #[serde(default)]
+    #[schemars(description = "Optional tags applied to the published package")]
+    tags: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "snake_case")]
+enum AssetPipelineOperationKind {
+    SearchMarketplace,
+    InsertAssetVersion,
+    ImportRbxm,
+    PublishPackage,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AssetPipelineOperationResult {
+    #[schemars(description = "Operation processed by Studio")]
+    action: AssetPipelineOperationKind,
+    #[schemars(description = "True when the operation completed successfully")]
+    success: bool,
+    #[schemars(description = "High level status string such as completed, error, or skipped")]
+    status: String,
+    #[serde(default)]
+    #[schemars(description = "Optional human readable message describing the outcome")]
+    message: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Structured metadata about the processed operation")]
+    details: Option<JsonValue>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AssetPipelineResponse {
+    #[schemars(description = "Per-operation outcomes for the asset pipeline request")]
+    results: Vec<AssetPipelineOperationResult>,
+    #[serde(default)]
+    #[schemars(description = "Optional summary string for the batch execution")]
+    summary: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "action", rename_all = "snake_case")]
+enum AssetPipelineOperation {
+    #[schemars(
+        description = "Search the Roblox marketplace for assets matching the provided query"
+    )]
+    SearchMarketplace {
+        #[schemars(description = "Search query used against the marketplace")]
+        query: String,
+        #[serde(default)]
+        #[schemars(description = "Maximum number of results to request (1-50)")]
+        limit: Option<u32>,
+        #[serde(default)]
+        #[schemars(description = "Optional creator name filter when supported")]
+        creator_name: Option<String>,
+    },
+    #[schemars(description = "Insert a specific asset version into the Studio session")]
+    InsertAssetVersion {
+        #[serde(default)]
+        #[schemars(description = "Asset ID used for reference in responses")]
+        asset_id: Option<u64>,
+        #[schemars(description = "Specific asset version ID to load via InsertService")]
+        asset_version_id: u64,
+        #[serde(default)]
+        #[schemars(description = "Desired name to assign to the inserted root instance")]
+        desired_name: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Parent path where the inserted instance should be placed")]
+        target_parent_path: Option<Vec<String>>,
+        #[serde(default)]
+        #[schemars(description = "Collision handling strategy for this operation")]
+        collision_strategy: Option<AssetCollisionStrategy>,
+        #[serde(default)]
+        #[schemars(description = "Placement options for PVInstances and Models")]
+        placement: Option<AssetPlacement>,
+        #[serde(default)]
+        #[schemars(description = "Optional package publishing request for the inserted instance")]
+        save_as_package: Option<PackagePublishRequest>,
+    },
+    #[schemars(description = "Import an RBXM/RBXLX file from the local filesystem into Studio")]
+    ImportRbxm {
+        #[schemars(description = "Absolute filesystem path to the RBXM or RBXLX file")]
+        file_path: String,
+        #[serde(default)]
+        #[schemars(description = "Desired name to assign to the imported root instance")]
+        desired_name: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Parent path where the imported instance should be placed")]
+        target_parent_path: Option<Vec<String>>,
+        #[serde(default)]
+        #[schemars(description = "Collision handling strategy for this operation")]
+        collision_strategy: Option<AssetCollisionStrategy>,
+        #[serde(default)]
+        #[schemars(description = "Placement options for PVInstances and Models")]
+        placement: Option<AssetPlacement>,
+        #[serde(default)]
+        #[schemars(description = "Optional package publishing request for the imported instance")]
+        save_as_package: Option<PackagePublishRequest>,
+    },
+    #[schemars(description = "Publish an existing instance in the place as a package")]
+    PublishPackage {
+        #[schemars(description = "Path pointing to the instance that should be published")]
+        instance_path: Vec<String>,
+        #[schemars(description = "Package publishing configuration")]
+        publish: PackagePublishRequest,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct AssetPipelineRequest {
+    #[schemars(description = "Operations to execute sequentially within the asset pipeline")]
+    operations: Vec<AssetPipelineOperation>,
+    #[serde(default)]
+    #[schemars(description = "Fallback parent path applied when operations omit a destination")]
+    default_parent_path: Option<Vec<String>>,
+    #[serde(default)]
+    #[schemars(description = "Default collision strategy when not supplied per operation")]
+    default_collision_strategy: Option<AssetCollisionStrategy>,
+    #[serde(default)]
+    #[schemars(description = "Default placement behaviour when not supplied per operation")]
+    default_placement: Option<AssetPlacement>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ScriptOperationResult {
     #[schemars(description = "Operation type that was processed")]
@@ -448,6 +625,7 @@ enum ToolArgumentValues {
     ApplyInstanceOperations(ApplyInstanceOperationsRequest),
     ManageScripts(ManageScriptsRequest),
     TestAndPlayControl(TestAndPlayControl),
+    AssetPipeline(AssetPipelineRequest),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -521,6 +699,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<TestAndPlayControl>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::TestAndPlayControl(args))
+            .await
+    }
+
+    #[tool(
+        description = "Executes asset pipeline workflows including marketplace search, insertion, filesystem import, and package publishing."
+    )]
+    async fn asset_pipeline(
+        &self,
+        Parameters(args): Parameters<AssetPipelineRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::AssetPipeline(args))
             .await
     }
 
