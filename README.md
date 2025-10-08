@@ -123,6 +123,12 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
   checkpointed ChangeHistory batch. Each operation supplies an `action`, an instance `path`
   (`{"Workspace", "Building", "Door"}`), and optional `properties` to write. Create operations
   additionally require a `className`, and you can override the terminal name with `name` when needed.
+- **`manage_scripts`** – Scaffold and maintain `Script`, `LocalScript`, and `ModuleScript`
+  instances. Combine `create`, `get_source`, `set_source`, and `rename` operations in a single
+  request to build new automation, retrieve existing code, or apply edits. Each operation works with
+  array-based paths (e.g. `{ "ServerScriptService", "NPC", "Brain" }`) and can opt into metadata such
+  as class names, parent paths, attributes, or run contexts. Source updates are syntax-checked before
+  Studio applies them, and responses include diagnostics when a change fails.
 
 ### Example prompts
 
@@ -173,3 +179,62 @@ The plugin validates each request against a conservative allowlist of supported 
 properties and wraps every property write in `pcall` to provide descriptive error messages. Successful
 batches are bookended with ChangeHistory waypoints so that the entire sequence can be undone with a
 single shortcut in Studio.
+
+You can also ask Claude or Cursor to scaffold and iterate on scripts without leaving the chat. For
+example, the following prompt creates a server script, updates an existing LocalScript after linting
+the new source, and renames a module:
+
+```
+Use manage_scripts to:
+1. Create ServerScriptService/MCP/EventRouter as a Script with RunContext "Server" and initial source that listens for the "SpawnNPC" RemoteEvent and logs received payloads.
+2. Update StarterPlayerScripts/UIBoot/HotbarController (LocalScript) so it requires "ReplicatedStorage/Controllers/EventBus" and forwards button presses through the RemoteEvent.
+3. Rename ReplicatedStorage/Controllers/oldEventBus module to EventBus.
+Include class names and run contexts in the response metadata.
+```
+
+The resulting tool call looks like:
+
+```json
+{
+  "tool": "ManageScripts",
+  "params": {
+    "defaultMetadata": {
+      "includeClassName": true,
+      "includeRunContext": true
+    },
+    "operations": [
+      {
+        "action": "create",
+        "path": ["ServerScriptService", "MCP", "EventRouter"],
+        "scriptType": "Script",
+        "runContext": "Server",
+        "source": "local event = game.ReplicatedStorage.SpawnNPC\nlocal function onSpawn(player, payload)\n\tprint(\"[MCP] SpawnNPC\", player, payload)\nend\nevent.OnServerEvent:Connect(onSpawn)",
+        "metadata": {
+          "includeAttributes": true,
+          "includeParentPath": true
+        }
+      },
+      {
+        "action": "set_source",
+        "path": ["StarterPlayer", "StarterPlayerScripts", "UIBoot", "HotbarController"],
+        "source": "local ReplicatedStorage = game:GetService('ReplicatedStorage')\nlocal event = ReplicatedStorage.SpawnNPC\nlocal EventBus = require(ReplicatedStorage.Controllers.EventBus)\n\nlocal function onButtonPressed(buttonId)\n\tEventBus.publish('hotbar', buttonId)\n\tevent:FireServer(buttonId)\nend\n\nscript.Parent.ButtonPressed:Connect(onButtonPressed)",
+        "metadata": {
+          "includeFullName": true
+        }
+      },
+      {
+        "action": "rename",
+        "path": ["ReplicatedStorage", "Controllers", "oldEventBus"],
+        "newName": "EventBus",
+        "metadata": {
+          "includeParentPath": true
+        }
+      }
+    ]
+  }
+}
+```
+
+Studio replies with a JSON payload that summarises each operation, echoes the requested metadata, and
+provides diagnostics (such as syntax errors) whenever a change is rejected. That makes it easy to keep
+Claude/Cursor in the loop while iteratively refining gameplay scripts.
