@@ -50,13 +50,14 @@ local function connectWebSocket()
 	client.MessageReceived:Connect(function(message)
 		log("[MCP] Message received")
 
-                local body = HttpService:JSONDecode(message)
-                assert(body and body.id and body.args, "Invalid message received")
-                assert(type(body.args) == "table", "Invalid message args payload")
-                assert(type(body.args.tool) == "string", "Missing tool identifier in payload")
-                assert(body.args.params ~= nil, "Missing params in payload")
-                assert(type(body.args.params) == "table", "Invalid params payload")
+		local body = HttpService:JSONDecode(message)
+		assert(body and body.id and body.args, "Invalid message received")
+		assert(type(body.args) == "table", "Invalid message args payload")
+		assert(type(body.args.tool) == "string", "Missing tool identifier in payload")
+		assert(body.args.params ~= nil, "Missing params in payload")
+		assert(type(body.args.params) == "table", "Invalid params payload")
 
+		local args: Types.ToolArgs = body.args
 		local id: string = body.id
 		local responseSent = false
 		local function sendResponseOnce(response: string)
@@ -67,17 +68,25 @@ local function connectWebSocket()
 					id = id,
 					response = response,
 				})
+				if args.tool == "InspectEnvironment" then
+					log("[MCP] Inspection response sent to MCP client")
+				end
 			end
 		end
 
-		local args: Types.ToolArgs = body.args
-		local recording = ChangeHistoryService:TryBeginRecording("StudioMCP")
+		local shouldRecordHistory = args.tool ~= "InspectEnvironment"
+		local recording = if shouldRecordHistory
+			then ChangeHistoryService:TryBeginRecording("StudioMCP")
+			else nil
 
 		for _, tool in tools do
 			local success, response = pcall(tool, args)
 
 			if success and response then
 				sendResponseOnce(response)
+				if args.tool == "InspectEnvironment" then
+					log("[MCP] Inspection response returned")
+				end
 			elseif not success then
 				sendResponseOnce("Error handling request: " .. tostring(response))
 			end
