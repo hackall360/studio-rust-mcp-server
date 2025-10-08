@@ -119,6 +119,12 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
     `services = { "Workspace", "Players", ... }` to customize the list and set `includeCounts`
     (default `true`) to gather descendant totals. The plugin serializes the results with
     `HttpService:JSONEncode`, so responses are safe to parse directly in Claude/Cursor prompts.
+- **`environment_control`** – Shape ambience and audio in one request. You can tune lighting colors,
+  `ClockTime`, `FogEnd`, and rendering technology, automatically create/update `Atmosphere`, `Sky`,
+  and post-processing effects, retint `Workspace.Terrain` water, and set `SoundService` properties or
+  trigger specific `Sound` instances (swap `SoundId`, adjust `Volume`, and optionally `Play`/`Stop`).
+  The plugin validates every value and wraps the batch in a single change-history recording so failed
+  edits roll back cleanly.
 - **`apply_instance_operations`** – Perform bulk instance edits (create/update/delete/reparent/clone/
   bulk_set_properties) in a single checkpointed ChangeHistory batch. Operations accept structured
   payloads so you can rename or move instances, spawn new assets, or fan out property edits across
@@ -219,6 +225,19 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
       }
     }
     ```
+
+### Environment control prompt ideas
+
+You can pair the new ambience controls with natural-language requests. Try prompts such as:
+
+- “Set the place to a warm sunset: clock time 18.5, ambient/outdoor ambient to a soft orange, fog
+  rolling in at 80 studs, and enable sun rays for the sunrise vibe.”
+- “Make the campsite feel misty at night. Add a thicker atmosphere haze, lower the fog end to 120,
+  and switch the lighting technology to Future.”
+- “Spin up an underwater soundscape by setting SoundService ambient reverb to UnderWater, boosting
+  terrain water transparency to 0.7, and playing `rbxassetid://184352123` on the `Workspace.Audio.
+  OceanLoop` sound at half volume.”
+
 - **`physics_and_navigation`** – Coordinate collision group authoring with navigation queries in a
   single request. The tool understands four operation types that can be mixed in one batch:
   - `create_collision_group` creates or replaces a group and can immediately toggle its active state.

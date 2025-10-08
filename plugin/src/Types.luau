@@ -77,6 +77,130 @@ export type InspectEnvironmentResponse = {
         },
 }
 
+export type Color3Components = { r: number, g: number, b: number }
+
+export type LightingSettings = {
+        ambient: Color3Components?,
+        outdoorAmbient: Color3Components?,
+        brightness: number?,
+        clockTime: number?,
+        fogColor: Color3Components?,
+        fogStart: number?,
+        fogEnd: number?,
+        technology: string?,
+}
+
+export type AtmosphereSettings = {
+        density: number?,
+        offset: number?,
+        color: Color3Components?,
+        decay: Color3Components?,
+        glare: number?,
+        haze: number?,
+}
+
+export type SkySettings = {
+        skyboxBk: string?,
+        skyboxDn: string?,
+        skyboxFt: string?,
+        skyboxLf: string?,
+        skyboxRt: string?,
+        skyboxUp: string?,
+        sunTextureId: string?,
+        moonTextureId: string?,
+        starCount: number?,
+        celestialBodiesShown: boolean?,
+}
+
+export type TerrainWaterSettings = {
+        waterColor: Color3Components?,
+        waterTransparency: number?,
+        waterWaveSize: number?,
+        waterWaveSpeed: number?,
+}
+
+export type SoundServiceSettings = {
+        ambientReverb: string?,
+        respectFilteringEnabled: boolean?,
+        dopplerScale: number?,
+        rolloffScale: number?,
+}
+
+export type SoundInstanceControl = {
+        path: InstancePath,
+        soundId: string?,
+        volume: number?,
+        playbackSpeed: number?,
+        looped: boolean?,
+        play: boolean?,
+        stop: boolean?,
+        timePosition: number?,
+}
+
+export type PostProcessingBaseEdit = {
+        effect: string,
+        name: string?,
+        enabled: boolean?,
+}
+
+export type BloomEffectEdit = PostProcessingBaseEdit & {
+        effect: "bloom",
+        intensity: number?,
+        size: number?,
+        threshold: number?,
+}
+
+export type ColorCorrectionEffectEdit = PostProcessingBaseEdit & {
+        effect: "color_correction",
+        brightness: number?,
+        contrast: number?,
+        saturation: number?,
+        tintColor: Color3Components?,
+}
+
+export type DepthOfFieldEffectEdit = PostProcessingBaseEdit & {
+        effect: "depth_of_field",
+        focusDistance: number?,
+        inFocusRadius: number?,
+        nearIntensity: number?,
+        farIntensity: number?,
+}
+
+export type SunRaysEffectEdit = PostProcessingBaseEdit & {
+        effect: "sun_rays",
+        intensity: number?,
+        spread: number?,
+}
+
+export type BlurEffectEdit = PostProcessingBaseEdit & {
+        effect: "blur",
+        size: number?,
+}
+
+export type PostProcessingEffectEdit =
+        BloomEffectEdit
+        | ColorCorrectionEffectEdit
+        | DepthOfFieldEffectEdit
+        | SunRaysEffectEdit
+        | BlurEffectEdit
+
+export type EnvironmentControlRequest = {
+        lighting: LightingSettings?,
+        atmosphere: AtmosphereSettings?,
+        sky: SkySettings?,
+        postProcessing: { PostProcessingEffectEdit }?,
+        terrainWater: TerrainWaterSettings?,
+        soundService: SoundServiceSettings?,
+        sounds: { SoundInstanceControl }?,
+}
+
+export type EnvironmentControlResponse = {
+        success: boolean,
+        summary: string?,
+        changes: { string }?,
+        errors: { string }?,
+}
+
 export type EditorSessionSetSelectionAction = {
         action: "set_selection",
         paths: { InstancePath },
@@ -557,6 +681,11 @@ export type CollectionAndAttributesToolArgs = {
 export type PhysicsAndNavigationToolArgs = {
         tool: "PhysicsAndNavigation",
         params: PhysicsAndNavigationRequest,
+}
+
+export type EnvironmentControlToolArgs = {
+        tool: "EnvironmentControl",
+        params: EnvironmentControlRequest,
 }
 
 export type ApplyInstanceOperationsToolArgs = {
