@@ -235,6 +235,165 @@ struct InspectEnvironment {
     services: Option<InspectServicesScope>,
 }
 
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct ScriptMetadataSelection {
+    #[schemars(description = "Include the class name of the resolved script instance")]
+    include_class_name: bool,
+    #[schemars(description = "Include the full name of the resolved script instance")]
+    include_full_name: bool,
+    #[schemars(description = "Include the normalised parent path for the script instance")]
+    include_parent_path: bool,
+    #[schemars(description = "Include all attributes returned by Instance:GetAttributes()")]
+    include_attributes: bool,
+    #[schemars(description = "Include the script RunContext when available")]
+    include_run_context: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct ManageScriptsRequest {
+    #[schemars(description = "Batch of script management operations to process sequentially")]
+    operations: Vec<ScriptOperation>,
+    #[schemars(description = "Metadata selection applied when operations omit an override")]
+    default_metadata: Option<ScriptMetadataSelection>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ManageScriptsResponse {
+    #[schemars(description = "Per-operation results summarising the managed scripts work")]
+    results: Vec<ScriptOperationResult>,
+    #[serde(default)]
+    #[schemars(description = "High level summary string describing the batch outcome")]
+    summary: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ScriptOperationResult {
+    #[schemars(description = "Operation type that was processed")]
+    action: ScriptOperationKind,
+    #[schemars(description = "Normalised path that was targeted for this operation")]
+    path: Vec<String>,
+    #[schemars(description = "True if the operation succeeded, false if it failed")]
+    success: bool,
+    #[serde(default)]
+    #[schemars(description = "Optional human readable message about the result")]
+    message: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Source code returned for get_source operations")]
+    source: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Metadata blob requested by the caller, if any")]
+    metadata: Option<JsonValue>,
+    #[serde(default)]
+    #[schemars(description = "Structured details about the processed operation")]
+    details: Option<JsonValue>,
+    #[serde(default)]
+    #[schemars(
+        description = "Collection of diagnostics (lint, syntax errors, etc.) for the request"
+    )]
+    diagnostics: Vec<ScriptDiagnostic>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ScriptDiagnostic {
+    #[schemars(description = "Diagnostic category, e.g. syntax or lint")]
+    #[serde(default)]
+    kind: Option<String>,
+    #[schemars(description = "Human readable diagnostic message")]
+    message: String,
+    #[serde(default)]
+    #[schemars(description = "1-indexed line number if provided by Studio")]
+    line: Option<u32>,
+    #[serde(default)]
+    #[schemars(description = "1-indexed column number if provided by Studio")]
+    column: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "snake_case")]
+enum ScriptOperationKind {
+    #[schemars(description = "Create a new script at the requested location")]
+    Create,
+    #[schemars(description = "Fetch the source for an existing script")]
+    GetSource,
+    #[schemars(description = "Replace the source on an existing script")]
+    SetSource,
+    #[schemars(description = "Rename an existing script instance")]
+    Rename,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+enum ScriptOperation {
+    #[serde(rename = "create")]
+    Create {
+        #[schemars(description = "Target path for the script, including the desired script name")]
+        path: Vec<String>,
+        #[schemars(
+            description = "Roblox class of the script to create (Script, LocalScript, ModuleScript)"
+        )]
+        #[serde(rename = "scriptType")]
+        script_type: ScriptType,
+        #[serde(default)]
+        #[schemars(description = "Optional source assigned to the script upon creation")]
+        source: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Optional run context, e.g. Server, Client, or Legacy")]
+        run_context: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Attributes applied via Instance:SetAttribute")]
+        attributes: HashMap<String, JsonValue>,
+        #[serde(default)]
+        #[schemars(description = "Metadata selection override for this operation")]
+        metadata: Option<ScriptMetadataSelection>,
+    },
+    #[serde(rename = "get_source")]
+    GetSource {
+        #[schemars(description = "Path to the existing script to inspect")]
+        path: Vec<String>,
+        #[serde(default)]
+        #[schemars(description = "Metadata selection override for this operation")]
+        metadata: Option<ScriptMetadataSelection>,
+    },
+    #[serde(rename = "set_source")]
+    SetSource {
+        #[schemars(description = "Path to the existing script to update")]
+        path: Vec<String>,
+        #[schemars(
+            description = "New source code that should replace the current script contents"
+        )]
+        source: String,
+        #[serde(default)]
+        #[schemars(description = "Metadata selection override for this operation")]
+        metadata: Option<ScriptMetadataSelection>,
+    },
+    #[serde(rename = "rename")]
+    Rename {
+        #[schemars(description = "Path to the existing script to rename")]
+        path: Vec<String>,
+        #[schemars(description = "Replacement name for the script instance")]
+        new_name: String,
+        #[serde(default)]
+        #[schemars(description = "Metadata selection override for this operation")]
+        metadata: Option<ScriptMetadataSelection>,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+enum ScriptType {
+    #[serde(rename = "Script")]
+    Script,
+    #[serde(rename = "LocalScript")]
+    LocalScript,
+    #[serde(rename = "ModuleScript")]
+    ModuleScript,
+}
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(tag = "tool", content = "params")]
 enum ToolArgumentValues {
@@ -242,6 +401,7 @@ enum ToolArgumentValues {
     InsertModel(InsertModel),
     InspectEnvironment(InspectEnvironment),
     ApplyInstanceOperations(ApplyInstanceOperationsRequest),
+    ManageScripts(ManageScriptsRequest),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -293,6 +453,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<ApplyInstanceOperationsRequest>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::ApplyInstanceOperations(args))
+            .await
+    }
+
+    #[tool(
+        description = "Creates, inspects, and edits Script/LocalScript/ModuleScript instances in the current Studio session."
+    )]
+    async fn manage_scripts(
+        &self,
+        Parameters(args): Parameters<ManageScriptsRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::ManageScripts(args))
             .await
     }
 
