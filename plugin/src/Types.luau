@@ -280,17 +280,73 @@ export type CollectionAndAttributesResponse = {
         affectedInstances: number?,
 }
 
-export type InstanceOperationAction = "create" | "update" | "delete"
+export type InstanceOperationAction =
+        "create"
+        | "update"
+        | "delete"
+        | "reparent"
+        | "clone"
+        | "bulk_set_properties"
 
 export type PropertyMap = { [string]: any }
 
-export type ApplyInstanceOperation = {
-        action: InstanceOperationAction,
+export type AttributeMap = { [string]: any }
+
+export type ApplyInstanceCreateOperation = {
+        action: "create",
+        path: InstancePath,
+        className: string,
+        name: string?,
+        properties: PropertyMap?,
+        attributes: AttributeMap?,
+}
+
+export type ApplyInstanceUpdateOperation = {
+        action: "update",
         path: InstancePath,
         properties: PropertyMap?,
-        className: string?,
-        name: string?,
+        attributes: AttributeMap?,
 }
+
+export type ApplyInstanceDeleteOperation = {
+        action: "delete",
+        path: InstancePath,
+}
+
+export type ApplyInstanceReparentOperation = {
+        action: "reparent",
+        path: InstancePath,
+        newParentPath: InstancePath,
+        name: string?,
+        properties: PropertyMap?,
+        attributes: AttributeMap?,
+}
+
+export type ApplyInstanceCloneOperation = {
+        action: "clone",
+        path: InstancePath,
+        cloneCount: number?,
+        newParentPath: InstancePath?,
+        name: string?,
+        properties: PropertyMap?,
+        attributes: AttributeMap?,
+}
+
+export type ApplyInstanceBulkSetPropertiesOperation = {
+        action: "bulk_set_properties",
+        targetPaths: { InstancePath },
+        properties: PropertyMap?,
+        attributes: AttributeMap?,
+        path: InstancePath?,
+}
+
+export type ApplyInstanceOperation =
+        ApplyInstanceCreateOperation
+        | ApplyInstanceUpdateOperation
+        | ApplyInstanceDeleteOperation
+        | ApplyInstanceReparentOperation
+        | ApplyInstanceCloneOperation
+        | ApplyInstanceBulkSetPropertiesOperation
 
 export type ApplyInstanceOperationsArgs = {
         operations: { ApplyInstanceOperation },
@@ -300,6 +356,7 @@ export type ApplyInstanceOperationResult = {
         index: number,
         action: InstanceOperationAction,
         path: InstancePath,
+        paths: { InstancePath }?,
         success: boolean,
         message: string?,
 }
