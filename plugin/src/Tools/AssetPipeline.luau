@@ -374,6 +374,7 @@ local function processSearchMarketplace(operation: Types.AssetPipelineSearchMark
         end
 
         local limit = clamp(math.floor(operation.limit or 10), 1, 50)
+        local creatorFilter = if type(operation.creatorName) == "string" and operation.creatorName ~= "" then string.lower(operation.creatorName) else nil
         local success, response = pcall(function()
                 return InsertService:GetFreeModels(operation.query, 0)
         end)
@@ -392,19 +393,25 @@ local function processSearchMarketplace(operation: Types.AssetPipelineSearchMark
                 results = {},
         }
 
+        if creatorFilter then
+                details.creatorFilter = operation.creatorName
+        end
+
         local count = 0
         if type(response) == "table" and response[1] and type(response[1]) == "table" and response[1].Results then
                 for _, entry in response[1].Results do
                         if type(entry) == "table" then
-                                table.insert(details.results, {
-                                        name = entry.Name,
-                                        assetId = entry.AssetId,
-                                        assetVersionId = entry.AssetVersionId,
-                                        creatorName = entry.CreatorName,
-                                })
-                                count += 1
-                                if count >= limit then
-                                        break
+                                if not creatorFilter or (type(entry.CreatorName) == "string" and string.lower(entry.CreatorName) == creatorFilter) then
+                                        table.insert(details.results, {
+                                                name = entry.Name,
+                                                assetId = entry.AssetId,
+                                                assetVersionId = entry.AssetVersionId,
+                                                creatorName = entry.CreatorName,
+                                        })
+                                        count += 1
+                                        if count >= limit then
+                                                break
+                                        end
                                 end
                         end
                 end
