@@ -119,3 +119,57 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
     `services = { "Workspace", "Players", ... }` to customize the list and set `includeCounts`
     (default `true`) to gather descendant totals. The plugin serializes the results with
     `HttpService:JSONEncode`, so responses are safe to parse directly in Claude/Cursor prompts.
+- **`apply_instance_operations`** – Perform bulk instance edits (create/update/delete) in a single
+  checkpointed ChangeHistory batch. Each operation supplies an `action`, an instance `path`
+  (`{"Workspace", "Building", "Door"}`), and optional `properties` to write. Create operations
+  additionally require a `className`, and you can override the terminal name with `name` when needed.
+
+### Example prompts
+
+You can ask Claude or Cursor to stage multiple changes at once. For example, the following prompt
+creates a lighting rig and tweaks an existing part in one tool call:
+
+```
+Use apply_instance_operations to:
+1. Create a PointLight at Workspace/LightingRig/PointLight with Brightness 3 and Range 18.
+2. Update Workspace/SetPiece/SpotlightCube so its Color is (1, 0.8, 0.6) and Transparency is 0.25.
+3. Delete Workspace/Temporary/DebugFolder.
+```
+
+The MCP client will translate that request into JSON similar to:
+
+```json
+{
+  "tool": "ApplyInstanceOperations",
+  "params": {
+    "operations": [
+      {
+        "action": "create",
+        "path": ["Workspace", "LightingRig", "PointLight"],
+        "className": "PointLight",
+        "properties": {
+          "Brightness": 3,
+          "Range": 18
+        }
+      },
+      {
+        "action": "update",
+        "path": ["Workspace", "SetPiece", "SpotlightCube"],
+        "properties": {
+          "Color": { "__type": "Color3", "r": 1, "g": 0.8, "b": 0.6 },
+          "Transparency": 0.25
+        }
+      },
+      {
+        "action": "delete",
+        "path": ["Workspace", "Temporary", "DebugFolder"]
+      }
+    ]
+  }
+}
+```
+
+The plugin validates each request against a conservative allowlist of supported classes and
+properties and wraps every property write in `pcall` to provide descriptive error messages. Successful
+batches are bookended with ChangeHistory waypoints so that the entire sequence can be undone with a
+single shortcut in Studio.

@@ -11,6 +11,7 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router, ErrorData, ServerHandler,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::sync::Arc;
@@ -101,6 +102,65 @@ struct InsertModel {
     query: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+enum InstanceOperationAction {
+    Create,
+    Update,
+    Delete,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct InstanceOperation {
+    #[schemars(description = "Operation to perform against the instance path")]
+    action: InstanceOperationAction,
+    #[schemars(description = "Ordered list of instance names to resolve the target path")]
+    path: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Optional class name, required for create actions")]
+    class_name: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Optional explicit instance name override")]
+    name: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Property bag applied during create/update operations")]
+    properties: std::collections::HashMap<String, JsonValue>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ApplyInstanceOperationsRequest {
+    #[schemars(description = "Batch of instance operations that will be processed sequentially")]
+    operations: Vec<InstanceOperation>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct InstanceOperationResult {
+    #[schemars(description = "Index of the processed operation within the request array")]
+    index: usize,
+    #[schemars(description = "Resolved operation action")]
+    action: InstanceOperationAction,
+    #[schemars(description = "Path that was processed for this result")]
+    path: Vec<String>,
+    #[schemars(description = "True if the operation succeeded, false otherwise")]
+    success: bool,
+    #[serde(default)]
+    #[schemars(description = "Optional detail describing the outcome of the operation")]
+    message: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ApplyInstanceOperationsResponse {
+    #[schemars(description = "Per-operation results returned from Studio")]
+    results: Vec<InstanceOperationResult>,
+    #[serde(default)]
+    #[schemars(description = "High level summary of the batch execution")]
+    summary: Option<String>,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -181,6 +241,7 @@ enum ToolArgumentValues {
     RunCode(RunCode),
     InsertModel(InsertModel),
     InspectEnvironment(InspectEnvironment),
+    ApplyInstanceOperations(ApplyInstanceOperationsRequest),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -221,6 +282,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<InspectEnvironment>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::InspectEnvironment(args))
+            .await
+    }
+
+    #[tool(
+        description = "Applies a batch of create/update/delete operations against instances in the open Studio session."
+    )]
+    async fn apply_instance_operations(
+        &self,
+        Parameters(args): Parameters<ApplyInstanceOperationsRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::ApplyInstanceOperations(args))
             .await
     }
 
