@@ -40,6 +40,7 @@ local function shouldRecordHistoryForRequest(args: Types.ToolArgs): boolean
                 or args.tool == "ApplyInstanceOperations"
                 or args.tool == "TestAndPlayControl"
                 or args.tool == "EditorSessionControl"
+                or args.tool == "DataModelSnapshot"
         then
                 return false
         end

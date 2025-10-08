@@ -77,6 +77,61 @@ export type InspectEnvironmentResponse = {
         },
 }
 
+export type DataModelSnapshotPropertyPick = {
+        classes: { string }?,
+        properties: { string }?,
+        sampleCount: number?,
+        randomize: boolean?,
+}
+
+export type DataModelSnapshotRequest = {
+        rootPaths: { InstancePath }?,
+        maxDepth: number?,
+        classAllowList: { string }?,
+        classBlockList: { string }?,
+        includeAttributes: boolean?,
+        includeProperties: boolean?,
+        includeFullName: boolean?,
+        propertyPicks: { DataModelSnapshotPropertyPick }?,
+        sortChildrenByName: boolean?,
+        pageSize: number?,
+        pageCursor: string?,
+        randomSeed: number?,
+}
+
+export type DataModelSnapshotPropertyMap = { [string]: any }
+
+export type DataModelSnapshotPropertyError = {
+        property: string,
+        message: string,
+}
+
+export type DataModelSnapshotEntry = {
+        path: InstancePath,
+        name: string,
+        className: string,
+        fullName: string?,
+        depth: number,
+        childCount: number?,
+        attributes: DataModelSnapshotPropertyMap?,
+        attributeError: string?,
+        properties: DataModelSnapshotPropertyMap?,
+        propertyErrors: { DataModelSnapshotPropertyError }?,
+}
+
+export type DataModelSnapshotResponse = {
+        entries: { DataModelSnapshotEntry },
+        nextCursor: string?,
+        totalMatched: number,
+        totalVisited: number,
+        truncated: boolean,
+        metadata: {
+                generatedAt: string,
+                rootCount: number?,
+                startIndex: number?,
+        }?,
+}
+
 export type Color3Components = { r: number, g: number, b: number }
 
 export type LightingSettings = {
@@ -661,6 +716,11 @@ export type RunCodeToolArgs = {
 export type InspectEnvironmentToolArgs = {
         tool: "InspectEnvironment",
         params: InspectEnvironmentArgs,
+}
+
+export type DataModelSnapshotToolArgs = {
+        tool: "DataModelSnapshot",
+        params: DataModelSnapshotRequest,
 }
 
 export type DiagnosticsAndMetricsToolArgs = {
