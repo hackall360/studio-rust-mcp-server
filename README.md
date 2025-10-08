@@ -163,7 +163,42 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
 > **Safety notice:** Starting a play session or running the test harness will execute scripts and
 > may mutate workspace state that has not been saved. Ensure critical changes are committed to
 > source control or saved locally before invoking the play or test tools, and avoid relying on
-> temporary state that might be reset when Studio reloads the environment.
+> temporary state that might be reset when Studio reloads the environment. Save open scripts and
+> publish your place first so any crashes or forced stops do not discard work.
+
+### Orchestrating playtests and automated tests
+
+Long-running Test and Play requests stream progress back to the MCP client. Status updates, log
+chunks, and structured summaries are appended to the JSON payload so Claude or Cursor can keep you
+informed while Studio runs. Typical prompts include:
+
+- **Quick solo play session** – “Start a `play_solo` run and tell me when it finishes. Stop it if it
+  takes longer than 90 seconds.”
+- **Local server playtest** – “Launch a `run_playtest` session with server + player and summarize any
+  script errors when gameplay ends.”
+- **Targeted test suite** – “Run `run_tests` for `NPCBehaviour` and `Inventory` test modules. Include
+  console logs and highlight failing assertions.”
+- **Emergency stop** – “Issue a `stop` command to halt any running playtest or TestService activity
+  and report whether Studio was still in a running state.”
+
+Equivalent JSON payloads can be sent directly from automation:
+
+```json
+{
+  "tool": "TestAndPlayControl",
+  "params": {
+    "action": "run_tests",
+    "options": {
+      "testNames": ["NPCBehaviour", "Inventory"],
+      "timeoutSeconds": 240,
+      "includeLogHistory": true
+    }
+  }
+}
+```
+
+Responses contain top-level fields such as `status`, `statusUpdates`, `chunks`, and `summary` so you
+can easily inspect what happened during the run or feed the data into follow-up prompts.
 
 ### Inspecting the Studio environment
 
