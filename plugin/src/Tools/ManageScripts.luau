@@ -2,6 +2,11 @@ local Main = script:FindFirstAncestor("MCPStudioPlugin")
 local Types = require(Main.Types)
 
 local HttpService = game:GetService("HttpService")
+local ServerScriptService = game:GetService("ServerScriptService")
+local ServerStorage = game:GetService("ServerStorage")
+local StarterPlayer = game:GetService("StarterPlayer")
+local StarterGui = game:GetService("StarterGui")
+local StarterPack = game:GetService("StarterPack")
 
 export type ScriptMetadataRequest = Types.ScriptMetadataRequest
 export type ScriptMetadata = Types.ScriptMetadata
@@ -96,6 +101,49 @@ local function resolveCreateDestination(path: Types.ScriptPath): (Instance?, { s
         end
 
         return parent, normalised, desiredName, nil
+end
+
+local function isDescendantOf(instance: Instance, ancestor: Instance): boolean
+        if not ancestor then
+                return false
+        end
+
+        if instance == ancestor then
+                return true
+        end
+
+        local ok, result = pcall(function()
+                return instance:IsDescendantOf(ancestor)
+        end)
+
+        if not ok then
+                return false
+        end
+
+        return result
+end
+
+local function validateScriptPlacement(scriptType: string, parent: Instance): (boolean, string?)
+        if scriptType == "LocalScript" then
+                if isDescendantOf(parent, ServerScriptService) then
+                        return false, "LocalScripts cannot run under ServerScriptService"
+                end
+                if isDescendantOf(parent, ServerStorage) then
+                        return false, "LocalScripts cannot run under ServerStorage"
+                end
+        elseif scriptType == "Script" then
+                if isDescendantOf(parent, StarterGui) then
+                        return false, "Server Scripts cannot run inside StarterGui"
+                end
+                if isDescendantOf(parent, StarterPack) then
+                        return false, "Server Scripts cannot run inside StarterPack"
+                end
+                if isDescendantOf(parent, StarterPlayer) then
+                        return false, "Server Scripts cannot run inside StarterPlayer containers"
+                end
+        end
+
+        return true, nil
 end
 
 local function cloneMetadataSelection(selection: ScriptMetadataRequest): ScriptMetadataRequest
@@ -267,6 +315,11 @@ local function processCreate(operation: Types.ManageScriptOperationCreate, metad
                 return makeResult(operation.action, normalised, false, destinationError, nil, nil, nil, nil)
         end
 
+        local okPlacement, placementError = validateScriptPlacement(scriptType, parent)
+        if not okPlacement then
+                return makeResult(operation.action, normalised, false, placementError, nil, nil, nil, nil)
+        end
+
         if parent:FindFirstChild(desiredName) then
                 return makeResult(operation.action, normalised, false, string.format("An instance named '%s' already exists under %s", desiredName, parent:GetFullName()), nil, nil, nil, nil)
         end
@@ -321,6 +374,7 @@ local function processCreate(operation: Types.ManageScriptOperationCreate, metad
         local details = {
                 created = true,
                 className = newScript.ClassName,
+                parentFullName = parent:GetFullName(),
         }
         local pathResult = getInstancePathSegments(newScript)
         return makeResult(operation.action, pathResult, true, string.format("Created %s", newScript:GetFullName()), metadata, nil, details, nil)
@@ -349,6 +403,7 @@ local function processSetSource(operation: Types.ManageScriptOperationSetSource,
                 return makeResult(operation.action, resolvedPath or getInstancePathSegments(scriptInstance), false, "New script source must be a string", nil, nil, nil, nil)
         end
 
+        local previousSource = scriptInstance.Source
         local valid, diagnostics = validateSource(operation.source)
         if not valid then
                 return makeResult(operation.action, resolvedPath or getInstancePathSegments(scriptInstance), false, "Source failed syntax validation", nil, diagnostics, nil, nil)
@@ -364,6 +419,8 @@ local function processSetSource(operation: Types.ManageScriptOperationSetSource,
         local metadata = gatherMetadata(scriptInstance, metadataRequest)
         local details = {
                 characters = #operation.source,
+                previousCharacters = #previousSource,
+                changed = previousSource ~= operation.source,
         }
         return makeResult(operation.action, resolvedPath or getInstancePathSegments(scriptInstance), true, string.format("Updated %s", scriptInstance:GetFullName()), metadata, nil, details, scriptInstance.Source)
 end
@@ -386,12 +443,20 @@ local function processRename(operation: Types.ManageScriptOperationRename, metad
         end
 
         local previousName = scriptInstance.Name
-        scriptInstance.Name = operation.newName
+        local previousPathSegments = resolvedPath or getInstancePathSegments(scriptInstance)
+
+        local successRename, renameError = pcall(function()
+                scriptInstance.Name = operation.newName
+        end)
+        if not successRename then
+                return makeResult(operation.action, resolvedPath or getInstancePathSegments(scriptInstance), false, string.format("Failed to rename script: %s", tostring(renameError)), nil, nil, nil, nil)
+        end
 
         local metadata = gatherMetadata(scriptInstance, metadataRequest)
         local details = {
                 previousName = previousName,
                 currentName = scriptInstance.Name,
+                previousPath = previousPathSegments,
         }
 
         local newPath = getInstancePathSegments(scriptInstance)
