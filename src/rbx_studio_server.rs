@@ -148,29 +148,123 @@ struct TestAndPlayControl {
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, PartialEq, Eq, Hash)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 enum InstanceOperationAction {
     Create,
     Update,
     Delete,
+    Reparent,
+    Clone,
+    BulkSetProperties,
 }
+
+type InstancePropertyMap = std::collections::HashMap<String, JsonValue>;
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
-struct InstanceOperation {
-    #[schemars(description = "Operation to perform against the instance path")]
-    action: InstanceOperationAction,
-    #[schemars(description = "Ordered list of instance names to resolve the target path")]
+struct CreateInstanceOperation {
+    #[schemars(
+        description = "Ordered list of instance names to resolve the destination parent path"
+    )]
     path: Vec<String>,
-    #[serde(default)]
-    #[schemars(description = "Optional class name, required for create actions")]
-    class_name: Option<String>,
+    #[schemars(description = "Class name for the instance that should be created")]
+    class_name: String,
     #[serde(default)]
     #[schemars(description = "Optional explicit instance name override")]
     name: Option<String>,
     #[serde(default)]
-    #[schemars(description = "Property bag applied during create/update operations")]
-    properties: std::collections::HashMap<String, JsonValue>,
+    #[schemars(description = "Property bag applied after the instance is created")]
+    properties: InstancePropertyMap,
+    #[serde(default)]
+    #[schemars(description = "Attributes applied after the instance is created")]
+    attributes: InstancePropertyMap,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct UpdateInstanceOperation {
+    #[schemars(description = "Ordered list of instance names to resolve the target path")]
+    path: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Property bag applied to the resolved instance")]
+    properties: InstancePropertyMap,
+    #[serde(default)]
+    #[schemars(
+        description = "Attributes applied to the resolved instance. Use JSON null to remove an attribute."
+    )]
+    attributes: InstancePropertyMap,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DeleteInstanceOperation {
+    #[schemars(description = "Ordered list of instance names to resolve the target path")]
+    path: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ReparentInstanceOperation {
+    #[schemars(description = "Ordered list of instance names to resolve the target path")]
+    path: Vec<String>,
+    #[schemars(description = "Ordered list of instance names describing the new parent location")]
+    new_parent_path: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Optional explicit instance name override applied after reparenting")]
+    name: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Property bag applied after the instance is reparented")]
+    properties: InstancePropertyMap,
+    #[serde(default)]
+    #[schemars(description = "Attributes applied after the instance is reparented")]
+    attributes: InstancePropertyMap,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct CloneInstanceOperation {
+    #[schemars(
+        description = "Ordered list of instance names to resolve the target that should be cloned"
+    )]
+    path: Vec<String>,
+    #[schemars(description = "Number of clones that should be produced (defaults to 1)")]
+    clone_count: Option<u32>,
+    #[serde(default)]
+    #[schemars(description = "Optional destination parent path for the new clones")]
+    new_parent_path: Option<Vec<String>>,
+    #[serde(default)]
+    #[schemars(description = "Optional base name applied to the generated clones")]
+    name: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Property bag applied to each generated clone")]
+    properties: InstancePropertyMap,
+    #[serde(default)]
+    #[schemars(description = "Attributes applied to each generated clone")]
+    attributes: InstancePropertyMap,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct BulkSetPropertiesOperation {
+    #[schemars(
+        description = "Ordered list of instance paths that should receive the property updates"
+    )]
+    target_paths: Vec<Vec<String>>,
+    #[schemars(description = "Property bag applied to each resolved target instance")]
+    properties: InstancePropertyMap,
+    #[schemars(description = "Attributes applied to each resolved target instance")]
+    attributes: InstancePropertyMap,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "action", rename_all = "snake_case")]
+enum InstanceOperation {
+    Create(CreateInstanceOperation),
+    Update(UpdateInstanceOperation),
+    Delete(DeleteInstanceOperation),
+    Reparent(ReparentInstanceOperation),
+    Clone(CloneInstanceOperation),
+    BulkSetProperties(BulkSetPropertiesOperation),
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
@@ -189,6 +283,9 @@ struct InstanceOperationResult {
     action: InstanceOperationAction,
     #[schemars(description = "Path that was processed for this result")]
     path: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Optional collection of instance paths affected by the operation")]
+    paths: Vec<Vec<String>>,
     #[schemars(description = "True if the operation succeeded, false otherwise")]
     success: bool,
     #[serde(default)]

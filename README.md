@@ -119,10 +119,106 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
     `services = { "Workspace", "Players", ... }` to customize the list and set `includeCounts`
     (default `true`) to gather descendant totals. The plugin serializes the results with
     `HttpService:JSONEncode`, so responses are safe to parse directly in Claude/Cursor prompts.
-- **`apply_instance_operations`** – Perform bulk instance edits (create/update/delete) in a single
-  checkpointed ChangeHistory batch. Each operation supplies an `action`, an instance `path`
-  (`{"Workspace", "Building", "Door"}`), and optional `properties` to write. Create operations
-  additionally require a `className`, and you can override the terminal name with `name` when needed.
+- **`apply_instance_operations`** – Perform bulk instance edits (create/update/delete/reparent/clone/
+  bulk_set_properties) in a single checkpointed ChangeHistory batch. Operations accept structured
+  payloads so you can rename or move instances, spawn new assets, or fan out property edits across
+  multiple targets in one request.
+  - `create`, `update`, and `delete` behave as before, and now also understand an `attributes` map
+    that is synchronised via `Instance:SetAttribute` alongside property updates.
+  - `reparent` resolves a `newParentPath`, optionally renames the instance, and enforces the same
+    script placement safety checks as the script management tool.
+  - `clone` duplicates a target `cloneCount` times (capped to 25), supports per-clone property and
+    attribute overrides, and can drop the copies into an alternate parent.
+  - `bulk_set_properties` broadcasts a shared property/attribute payload across many
+    `targetPaths`, letting you toggle large groups of emitters, lights, or UI widgets at once.
+  - The creation allowlist now covers common art/audio/UI classes such as `Sound`, `ParticleEmitter`,
+    `Trail`, `Decal`, `Texture`, `Humanoid`, `UIGradient`, and text-based GUI objects, with property
+    gates that expose real Studio fields like `SoundId`, `Volume`, `EmissionRate`, `Enabled`,
+    `Text`, and `Rotation`.
+  - Example payload manipulating UI, audio, particles, and characters:
+
+    ```json
+    {
+      "tool": "ApplyInstanceOperations",
+      "params": {
+        "operations": [
+          {
+            "action": "create",
+            "path": ["Workspace", "Effects", "CelebrationSound"],
+            "className": "Sound",
+            "properties": {
+              "SoundId": "rbxassetid://123456789",
+              "Volume": 0.5,
+              "PlaybackSpeed": 1.2
+            },
+            "attributes": {
+              "Category": "Music"
+            }
+          },
+          {
+            "action": "create",
+            "path": ["StarterGui", "Hud", "Gradient"],
+            "className": "UIGradient",
+            "properties": {
+              "Rotation": 90
+            },
+            "attributes": {
+              "Theme": "Night"
+            }
+          },
+          {
+            "action": "reparent",
+            "path": ["StarterGui", "Hud", "NotificationLabel"],
+            "newParentPath": ["StarterGui", "Hud", "NotificationFrame"],
+            "properties": {
+              "Position": {
+                "type": "UDim2",
+                "xScale": 0.5,
+                "xOffset": -200,
+                "yScale": 0,
+                "yOffset": 32
+              }
+            },
+            "attributes": {
+              "State": "Pinned"
+            }
+          },
+          {
+            "action": "clone",
+            "path": ["Workspace", "Effects", "CelebrationSound"],
+            "cloneCount": 2,
+            "newParentPath": ["ReplicatedStorage", "Audio"],
+            "name": "CelebrationVariant",
+            "properties": {
+              "Volume": 0.25
+            }
+          },
+          {
+            "action": "bulk_set_properties",
+            "targetPaths": [
+              ["Workspace", "Environment", "SmokeEmitter"],
+              ["Workspace", "Environment", "SparkleEmitter"]
+            ],
+            "properties": {
+              "EmissionRate": 40,
+              "Enabled": true
+            }
+          },
+          {
+            "action": "update",
+            "path": ["Workspace", "NPC", "Rig", "Humanoid"],
+            "properties": {
+              "WalkSpeed": 14,
+              "JumpPower": 45
+            },
+            "attributes": {
+              "Behaviour": "Calm"
+            }
+          }
+        ]
+      }
+    }
+    ```
 - **`manage_scripts`** – Scaffold and maintain `Script`, `LocalScript`, and `ModuleScript`
   instances. Combine `create`, `get_source`, `set_source`, and `rename` operations in a single
   request to build new automation, retrieve existing code, or apply edits. Each operation works with
