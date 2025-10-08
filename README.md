@@ -88,7 +88,8 @@ To make sure everything is set up correctly, follow these steps:
    which you can also verify in the console output.
 1. Verify that Claude Desktop is correctly configured by clicking on the hammer icon for MCP tools
    beneath the text field where you enter prompts. This should open a window with the list of
-   available Roblox Studio tools (`insert_model`, `inspect_environment`, and `run_code`).
+   available Roblox Studio tools (`insert_model`, `inspect_environment`, `data_model_snapshot`, and
+   `run_code`).
 
 **Note**: You can fix common issues with setup by restarting Studio and Claude Desktop. Claude
 sometimes is hidden in the system tray, so ensure you've exited it completely.
@@ -119,6 +120,55 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
     `services = { "Workspace", "Players", ... }` to customize the list and set `includeCounts`
     (default `true`) to gather descendant totals. The plugin serializes the results with
     `HttpService:JSONEncode`, so responses are safe to parse directly in Claude/Cursor prompts.
+- **`data_model_snapshot`** – Traverse the DataModel (or a filtered subset of it) and emit
+  structured metadata for each visited instance without touching ChangeHistory. Requests accept:
+  - `rootPaths`: Array of instance paths that serve as traversal roots. Defaults to the DataModel if
+    omitted.
+  - `maxDepth`: Restrict how deep the walk should descend relative to each root (depth `0` captures
+    just the root instance).
+  - `classAllowList`/`classBlockList`: Filter which classes show up in the response while optionally
+    skipping specific branches entirely.
+  - `propertyPicks`: Describe which properties to read per class. Each pick can target specific
+    classes, list properties, and request deterministic sampling via `sampleCount`/`randomize` plus
+    an optional `randomSeed`.
+  - `includeAttributes`, `includeProperties`, and `includeFullName` toggle the extra metadata
+    collected for each entry.
+  - `pageSize` and `pageCursor` make the tool page-friendly for large worlds, returning a
+    `nextCursor` token when more data is available.
+
+  Example snapshot request that inspects lighting under `Workspace` and `Lighting`, sampling a few
+  expensive properties along the way:
+
+  ```json
+  {
+    "tool": "DataModelSnapshot",
+    "params": {
+      "rootPaths": [
+        ["Workspace"],
+        ["Lighting"]
+      ],
+      "maxDepth": 2,
+      "classAllowList": ["Part", "SpotLight", "Lighting"],
+      "propertyPicks": [
+        {
+          "properties": ["Material", "Color", "Reflectance", "Anchored"],
+          "sampleCount": 3,
+          "randomize": true,
+          "classes": ["Part"]
+        },
+        {
+          "properties": ["Brightness", "ClockTime", "FogEnd"]
+        }
+      ],
+      "pageSize": 100,
+      "includeAttributes": true,
+      "includeFullName": true
+    }
+  }
+  ```
+
+  The plugin returns JSON containing the `entries` array, pagination metadata, and normalized
+  attribute/property payloads ready for direct downstream parsing.
 - **`environment_control`** – Shape ambience and audio in one request. You can tune lighting colors,
   `ClockTime`, `FogEnd`, and rendering technology, automatically create/update `Atmosphere`, `Sky`,
   and post-processing effects, retint `Workspace.Terrain` water, and set `SoundService` properties or

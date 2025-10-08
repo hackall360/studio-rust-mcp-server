@@ -1660,6 +1660,134 @@ struct PhysicsAndNavigationResponse {
     write_occurred: bool,
 }
 
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct DataModelSnapshotPropertyPick {
+    #[schemars(
+        description = "Classes this property pick applies to. When empty the pick applies to every instance."
+    )]
+    classes: Vec<String>,
+    #[schemars(description = "Property names to capture when the pick applies.")]
+    properties: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Optional limit on the number of properties sampled from this pick.")]
+    sample_count: Option<u32>,
+    #[serde(default)]
+    #[schemars(description = "Randomise property sampling order when sample_count is set.")]
+    randomize: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct DataModelSnapshotRequest {
+    #[schemars(
+        description = "Instance paths to use as traversal roots. Defaults to the DataModel when omitted."
+    )]
+    root_paths: Vec<Vec<String>>,
+    #[serde(default)]
+    #[schemars(
+        description = "Maximum traversal depth relative to each root. Depth 0 only returns the root instance."
+    )]
+    max_depth: Option<u32>,
+    #[serde(default)]
+    #[schemars(description = "Allow list of class names that should be included in the response.")]
+    class_allow_list: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Block list of class names that should be skipped entirely.")]
+    class_block_list: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Include Instance:GetAttributes() in the response for each entry.")]
+    include_attributes: Option<bool>,
+    #[serde(default)]
+    #[schemars(
+        description = "Include property values in the response. Defaults to true when property picks are supplied."
+    )]
+    include_properties: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "Property selection directives applied while reading instances.")]
+    property_picks: Vec<DataModelSnapshotPropertyPick>,
+    #[serde(default)]
+    #[schemars(description = "Sort children by name before traversal for deterministic ordering.")]
+    sort_children_by_name: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "Maximum number of entries to return in a single response.")]
+    page_size: Option<u32>,
+    #[serde(default)]
+    #[schemars(
+        description = "Cursor identifying the next entry offset when paging through large snapshots."
+    )]
+    page_cursor: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Include Instance:GetFullName() for every returned entry.")]
+    include_full_name: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "Seed used when randomising sampled property lists.")]
+    random_seed: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct DataModelSnapshotInstance {
+    #[schemars(description = "Path of the instance relative to the DataModel.")]
+    path: Vec<String>,
+    #[schemars(description = "Name of the instance.")]
+    name: String,
+    #[schemars(description = "Class name of the instance.")]
+    class_name: String,
+    #[serde(default)]
+    #[schemars(description = "Full name returned by Instance::GetFullName().")]
+    full_name: Option<String>,
+    #[schemars(description = "Zero-based depth for the entry relative to the traversal root.")]
+    depth: u32,
+    #[serde(default)]
+    #[schemars(description = "Total number of direct children discovered for the instance.")]
+    child_count: Option<u32>,
+    #[serde(default)]
+    #[schemars(description = "Instance attributes captured for the snapshot entry.")]
+    attributes: HashMap<String, JsonValue>,
+    #[serde(default)]
+    #[schemars(description = "Property values captured for the snapshot entry.")]
+    properties: HashMap<String, JsonValue>,
+    #[serde(default)]
+    #[schemars(description = "Errors encountered while reading requested properties.")]
+    property_errors: Vec<DataModelSnapshotPropertyError>,
+    #[serde(default)]
+    #[schemars(description = "Error message captured when attribute access failed.")]
+    attribute_error: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct DataModelSnapshotPropertyError {
+    #[schemars(description = "Name of the property that failed to read.")]
+    property: String,
+    #[schemars(
+        description = "Error message returned by Studio when attempting to read the property."
+    )]
+    message: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct DataModelSnapshotResponse {
+    #[schemars(description = "Snapshot entries captured for this response page.")]
+    entries: Vec<DataModelSnapshotInstance>,
+    #[serde(default)]
+    #[schemars(description = "Cursor for requesting the next page when pagination is enabled.")]
+    next_cursor: Option<String>,
+    #[schemars(description = "Number of instances that matched the supplied filters.")]
+    total_matched: u64,
+    #[schemars(
+        description = "Number of instances visited during traversal including filtered entries."
+    )]
+    total_visited: u64,
+    #[schemars(description = "True when traversal was truncated due to depth or paging limits.")]
+    truncated: bool,
+    #[serde(default)]
+    #[schemars(description = "Metadata describing the snapshot execution.")]
+    metadata: HashMap<String, JsonValue>,
+}
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(tag = "tool", content = "params")]
 enum ToolArgumentValues {
@@ -1676,6 +1804,7 @@ enum ToolArgumentValues {
     CollectionAndAttributes(CollectionAndAttributesRequest),
     PhysicsAndNavigation(PhysicsAndNavigationRequest),
     DiagnosticsAndMetrics(DiagnosticsAndMetricsRequest),
+    DataModelSnapshot(DataModelSnapshotRequest),
 }
 #[tool_router]
 impl RBXStudioServer {
@@ -1826,6 +1955,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<DiagnosticsAndMetricsRequest>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::DiagnosticsAndMetrics(args))
+            .await
+    }
+
+    #[tool(
+        description = "Collects read-only snapshots of the DataModel with optional class filters, property sampling, and pagination."
+    )]
+    async fn data_model_snapshot(
+        &self,
+        Parameters(args): Parameters<DataModelSnapshotRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::DataModelSnapshot(args))
             .await
     }
 
