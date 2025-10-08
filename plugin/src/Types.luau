@@ -703,7 +703,58 @@ export type EditorSessionControlToolArgs = {
         params: EditorSessionControlArgs,
 }
 
-export type TestAndPlayAction = "play_solo" | "stop" | "run_tests" | "run_playtest"
+export type TestAndPlayAction =
+        "play_solo"
+        | "stop"
+        | "run_tests"
+        | "run_playtest"
+        | "send_input"
+        | "capture_stats"
+
+export type TestAndPlayInputWaitStep = {
+        kind: "wait",
+        seconds: number,
+}
+
+export type TestAndPlayInputKeyStep = {
+        kind: "key",
+        keyCode: string,
+        isDown: boolean?,
+        isRepeat: boolean?,
+        text: string?,
+        delaySeconds: number?,
+}
+
+export type TestAndPlayInputMouseButtonStep = {
+        kind: "mouse_button",
+        x: number?,
+        y: number?,
+        button: string,
+        isDown: boolean?,
+        moveMouse: boolean?,
+        delaySeconds: number?,
+}
+
+export type TestAndPlayInputMouseMoveStep = {
+        kind: "mouse_move",
+        x: number?,
+        y: number?,
+        deltaX: number?,
+        deltaY: number?,
+        delaySeconds: number?,
+}
+
+export type TestAndPlayInputStep =
+        TestAndPlayInputWaitStep
+        | TestAndPlayInputKeyStep
+        | TestAndPlayInputMouseButtonStep
+        | TestAndPlayInputMouseMoveStep
+
+export type TestAndPlayTelemetryFlags = {
+        includeRunState: boolean?,
+        includeLocalPlayerPosition: boolean?,
+        includeGuiVisibility: boolean?,
+}
 
 export type TestAndPlayControlOptions = {
         timeoutSeconds: number?,
@@ -711,6 +762,9 @@ export type TestAndPlayControlOptions = {
         testNames: { string }?,
         runAsync: boolean?,
         includeLogHistory: boolean?,
+        inputSequence: { TestAndPlayInputStep }?,
+        watchTargets: { string }?,
+        telemetry: TestAndPlayTelemetryFlags?,
 }
 
 export type TestAndPlayControlArgs = {

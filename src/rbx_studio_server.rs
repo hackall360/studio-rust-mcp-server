@@ -113,6 +113,99 @@ enum TestAndPlayAction {
     RunTests,
     #[schemars(description = "Start a playtest session (e.g. start server + player)")]
     RunPlaytest,
+    #[schemars(description = "Send a sequence of key and mouse events to the active play session")]
+    SendInput,
+    #[schemars(
+        description = "Capture requested telemetry from the active play or playtest session"
+    )]
+    CaptureStats,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct TestAndPlayTelemetryFlags {
+    #[serde(default)]
+    #[schemars(description = "Include RunService:IsRunning and IsRunMode values in the payload")]
+    include_run_state: Option<bool>,
+    #[serde(default)]
+    #[schemars(description = "Include the local player's humanoid root position when available")]
+    include_local_player_position: Option<bool>,
+    #[serde(default)]
+    #[schemars(
+        description = "Include visibility state for each supplied watch target (e.g. GUI paths)"
+    )]
+    include_gui_visibility: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum VirtualInputStep {
+    #[schemars(
+        description = "Send a key press or release using VirtualInputManager::SendKeyEvent"
+    )]
+    Key {
+        #[schemars(description = "Enum.KeyCode name to dispatch (e.g. W, Space, Escape)")]
+        key_code: String,
+        #[serde(default)]
+        #[schemars(description = "True to send a key down event, false for key up")]
+        is_down: Option<bool>,
+        #[serde(default = "default_false")]
+        #[schemars(description = "Mark the key event as a repeat event")]
+        is_repeat: bool,
+        #[serde(default)]
+        #[schemars(description = "Optional text payload delivered with the key event")]
+        text: Option<String>,
+        #[serde(default)]
+        #[schemars(description = "Seconds to wait before running the next input step")]
+        delay_seconds: Option<f64>,
+    },
+    #[schemars(
+        description = "Send a mouse button event using VirtualInputManager::SendMouseButtonEvent"
+    )]
+    MouseButton {
+        #[serde(default = "default_zero")]
+        #[schemars(description = "Screen X coordinate to associate with the event")]
+        x: f64,
+        #[serde(default = "default_zero")]
+        #[schemars(description = "Screen Y coordinate to associate with the event")]
+        y: f64,
+        #[schemars(description = "Enum.UserInputType name for the button (e.g. MouseButton1)")]
+        button: String,
+        #[serde(default = "default_true")]
+        #[schemars(description = "True to press the button, false to release")]
+        is_down: bool,
+        #[serde(default = "default_false")]
+        #[schemars(
+            description = "If true, Roblox will treat the event as a mouse move while clicking"
+        )]
+        move_mouse: bool,
+        #[serde(default)]
+        #[schemars(description = "Seconds to wait before running the next input step")]
+        delay_seconds: Option<f64>,
+    },
+    #[schemars(description = "Send a mouse move using VirtualInputManager::SendMouseMoveEvent")]
+    MouseMove {
+        #[serde(default = "default_zero")]
+        #[schemars(description = "Target absolute screen X coordinate")]
+        x: f64,
+        #[serde(default = "default_zero")]
+        #[schemars(description = "Target absolute screen Y coordinate")]
+        y: f64,
+        #[serde(default = "default_zero")]
+        #[schemars(description = "Delta X applied with the move event")]
+        delta_x: f64,
+        #[serde(default = "default_zero")]
+        #[schemars(description = "Delta Y applied with the move event")]
+        delta_y: f64,
+        #[serde(default)]
+        #[schemars(description = "Seconds to wait before running the next input step")]
+        delay_seconds: Option<f64>,
+    },
+    #[schemars(description = "Pause execution before running the next input step")]
+    Wait {
+        #[schemars(description = "Seconds to wait before continuing")]
+        seconds: f64,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
@@ -135,6 +228,19 @@ struct TestAndPlayControlOptions {
     #[serde(default)]
     #[schemars(description = "Include the captured Studio log history in the response payload")]
     include_log_history: Option<bool>,
+    #[serde(default)]
+    #[schemars(
+        description = "Sequence of key, mouse, and wait steps executed for send_input actions"
+    )]
+    input_sequence: Vec<VirtualInputStep>,
+    #[serde(default)]
+    #[schemars(description = "Named watch targets (e.g. GUI instance paths) used for telemetry")]
+    watch_targets: Vec<String>,
+    #[serde(default)]
+    #[schemars(
+        description = "Telemetry capture flags applied to send_input or capture_stats runs"
+    )]
+    telemetry: Option<TestAndPlayTelemetryFlags>,
 }
 
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
@@ -308,6 +414,14 @@ struct ApplyInstanceOperationsResponse {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_zero() -> f64 {
+    0.0
 }
 
 fn default_service_list() -> Vec<String> {

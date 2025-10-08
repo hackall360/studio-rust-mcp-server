@@ -374,6 +374,51 @@ informed while Studio runs. Typical prompts include:
   console logs and highlight failing assertions.”
 - **Emergency stop** – “Issue a `stop` command to halt any running playtest or TestService activity
   and report whether Studio was still in a running state.”
+- **Automated menu navigation** – “Once play mode is running, call `send_input` with key and mouse
+  steps to open the escape menu and click the publish button. Wait between steps so the UI can
+  animate.”
+- **Capture live stats** – “Call `capture_stats` with `includeRunState` and a `Players.LocalPlayer` GUI
+  watch target so I can confirm whether the HUD is visible before proceeding.”
+
+The `send_input` action waits for `RunService:IsRunning()` before dispatching key or mouse events
+through `VirtualInputManager`, so sequences only succeed during active play or playtest sessions. You
+can mix `key`, `mouse_button`, `mouse_move`, and `wait` steps and attach optional `delaySeconds`
+values to pace the automation. Pairing the sequence with telemetry flags lets you capture a
+post-action snapshot of the run state, LocalPlayer position, or GUI visibility. The companion
+`capture_stats` action gathers the same telemetry without emitting input, which is ideal for
+lightweight health checks between runs.
+
+```json
+{
+  "tool": "TestAndPlayControl",
+  "params": {
+    "action": "send_input",
+    "options": {
+      "timeoutSeconds": 45,
+      "inputSequence": [
+        { "kind": "wait", "seconds": 2 },
+        { "kind": "key", "keyCode": "Escape" },
+        { "kind": "mouse_move", "x": 320, "y": 180, "delaySeconds": 0.25 },
+        {
+          "kind": "mouse_button",
+          "button": "MouseButton1",
+          "isDown": true,
+          "x": 320,
+          "y": 180,
+          "delaySeconds": 0.05
+        },
+        { "kind": "mouse_button", "button": "MouseButton1", "isDown": false }
+      ],
+      "watchTargets": ["Players.LocalPlayer.PlayerGui.HUD"],
+      "telemetry": {
+        "includeRunState": true,
+        "includeLocalPlayerPosition": true,
+        "includeGuiVisibility": true
+      }
+    }
+  }
+}
+```
 
 Equivalent JSON payloads can be sent directly from automation:
 
