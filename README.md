@@ -140,6 +140,13 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
   files, and publish packages without leaving Claude or Cursor. Each operation reports structured
   status including resolved instance paths, collision handling decisions, placement adjustments, and
   optional package metadata.
+- **`terrain_operations`** – Execute batches of voxel edits without leaving the chat. Supported
+  operations include `fill_block`, `fill_region`, `replace_material`, `clear_region`, and
+  `convert_to_terrain`. Each subcommand accepts numeric payloads (CFrame component arrays, Region3int16
+  corners, and material enum names) and returns a JSON summary describing whether terrain was mutated,
+  the resolved pivots, and any failures. Optional `pivotRelative` flags combine with
+  `pivot = { mode = "active_camera", offset = { dx, dy, dz } }` to position edits in front of the
+  viewport, making it easy to paint terrain relative to the current shot.
 - **`diagnostics_and_metrics`** – Gather troubleshooting data from Studio in a single response. The
   tool can stream recent error and warning logs in timestamped chunks, capture memory usage
   (including DeveloperMemoryTag breakdowns), summarise TaskScheduler and service health, and
@@ -149,6 +156,46 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
 > may mutate workspace state that has not been saved. Ensure critical changes are committed to
 > source control or saved locally before invoking the play or test tools, and avoid relying on
 > temporary state that might be reset when Studio reloads the environment.
+
+### Terrain authoring workflow
+
+`terrain_operations` requests look like the following:
+
+```json
+{
+  "tool": "TerrainOperations",
+  "params": {
+    "pivot": {
+      "mode": "active_camera",
+      "offset": [0, -4, -40]
+    },
+    "operations": [
+      {
+        "operation": "fill_block",
+        "cframeComponents": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+        "size": [16, 4, 16],
+        "material": "Grass",
+        "pivotRelative": true
+      },
+      {
+        "operation": "replace_material",
+        "cornerMin": [-48, -32, -48],
+        "cornerMax": [48, 16, 48],
+        "resolution": 4,
+        "sourceMaterial": "Grass",
+        "targetMaterial": "Mud"
+      }
+    ]
+  }
+}
+```
+
+Each response is JSON-encoded and includes an array of per-operation results plus a
+`writeOccurred` flag. The Studio plugin records undo checkpoints only when `writeOccurred` is true,
+so read-only inspections or failed conversions can be issued safely without cluttering the change
+history. Terrain edits still modify live data; save frequently, keep backups before running bulk
+operations, and double-check the resolved coordinates (reported in the `details` field) before
+running destructive actions such as `clear_region`.
 
 ### Example prompts
 
