@@ -51,6 +51,86 @@ export type DiagnosticsAndMetricsArgs = {
         serviceSelection: DiagnosticsServiceSelection?,
 }
 
+export type Vector3Components = { number }
+export type RegionCornerComponents = { number }
+export type CFrameComponents = { number }
+
+export type TerrainPivotMode = "active_camera"
+
+export type TerrainPivotPlacement = {
+        mode: TerrainPivotMode?,
+        offset: Vector3Components?,
+}
+
+export type TerrainFillBlockOperation = {
+        operation: "fill_block",
+        cframeComponents: CFrameComponents,
+        size: Vector3Components,
+        material: string,
+        occupancy: number?,
+        pivotRelative: boolean?,
+}
+
+export type TerrainFillRegionOperation = {
+        operation: "fill_region",
+        cornerMin: RegionCornerComponents,
+        cornerMax: RegionCornerComponents,
+        material: string,
+        resolution: number?,
+        pivotRelative: boolean?,
+}
+
+export type TerrainReplaceMaterialOperation = {
+        operation: "replace_material",
+        sourceMaterial: string,
+        targetMaterial: string,
+        cornerMin: RegionCornerComponents,
+        cornerMax: RegionCornerComponents,
+        resolution: number?,
+        pivotRelative: boolean?,
+}
+
+export type TerrainClearRegionOperation = {
+        operation: "clear_region",
+        cornerMin: RegionCornerComponents?,
+        cornerMax: RegionCornerComponents?,
+        resolution: number?,
+        pivotRelative: boolean?,
+}
+
+export type TerrainConvertToTerrainOperation = {
+        operation: "convert_to_terrain",
+        paths: { InstancePath },
+        resolution: number?,
+        targetMaterial: string?,
+}
+
+export type TerrainOperation =
+        TerrainFillBlockOperation
+        | TerrainFillRegionOperation
+        | TerrainReplaceMaterialOperation
+        | TerrainClearRegionOperation
+        | TerrainConvertToTerrainOperation
+
+export type TerrainOperationsRequest = {
+        operations: { TerrainOperation },
+        pivot: TerrainPivotPlacement?,
+}
+
+export type TerrainOperationResult = {
+        index: number,
+        operation: "fill_block" | "fill_region" | "replace_material" | "clear_region" | "convert_to_terrain",
+        success: boolean,
+        message: string?,
+        details: { [string]: any }?,
+}
+
+export type TerrainOperationsResponse = {
+        results: { TerrainOperationResult },
+        summary: string?,
+        writeOccurred: boolean,
+}
+
 export type InstancePath = { string }
 
 export type InstanceOperationAction = "create" | "update" | "delete"
@@ -174,6 +254,11 @@ export type InspectEnvironmentToolArgs = {
 export type DiagnosticsAndMetricsToolArgs = {
         tool: "DiagnosticsAndMetrics",
         params: DiagnosticsAndMetricsArgs,
+}
+
+export type TerrainOperationsToolArgs = {
+        tool: "TerrainOperations",
+        params: TerrainOperationsRequest,
 }
 
 export type ApplyInstanceOperationsToolArgs = {

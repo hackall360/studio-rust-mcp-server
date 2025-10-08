@@ -77,26 +77,43 @@ local function connectWebSocket()
                 local shouldRecordHistory = args.tool ~= "InspectEnvironment"
                         and args.tool ~= "ApplyInstanceOperations"
                         and args.tool ~= "TestAndPlayControl"
-		local recording = if shouldRecordHistory
-			then ChangeHistoryService:TryBeginRecording("StudioMCP")
-			else nil
+                local recording = if shouldRecordHistory
+                        then ChangeHistoryService:TryBeginRecording("StudioMCP")
+                        else nil
+                local historyWriteOccurred = false
 
-		for _, tool in tools do
-			local success, response = pcall(tool, args)
+                for _, tool in tools do
+                        local success, response = pcall(tool, args)
 
-			if success and response then
-				sendResponseOnce(response)
-				if args.tool == "InspectEnvironment" then
-					log("[MCP] Inspection response returned")
-				end
-			elseif not success then
+                        if success and response then
+                                if shouldRecordHistory and not historyWriteOccurred then
+                                        if args.tool == "TerrainOperations" then
+                                                local ok, decoded = pcall(HttpService.JSONDecode, HttpService, response)
+                                                if ok
+                                                        and type(decoded) == "table"
+                                                        and decoded.writeOccurred == true
+                                                then
+                                                        historyWriteOccurred = true
+                                                end
+                                        else
+                                                historyWriteOccurred = true
+                                        end
+                                end
+                                sendResponseOnce(response)
+                                if args.tool == "InspectEnvironment" then
+                                        log("[MCP] Inspection response returned")
+                                end
+                        elseif not success then
 				sendResponseOnce("Error handling request: " .. tostring(response))
 			end
 		end
 
-		if recording then
-			ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit)
-		end
+                if recording then
+                        local finishMode = if historyWriteOccurred
+                                then Enum.FinishRecordingOperation.Commit
+                                else Enum.FinishRecordingOperation.Cancel
+                        ChangeHistoryService:FinishRecording(recording, finishMode)
+                end
 
 		sendResponseOnce("No tool found to handle request")
 		log("[MCP] Successfully handled request")

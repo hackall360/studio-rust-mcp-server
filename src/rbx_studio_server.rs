@@ -314,6 +314,160 @@ struct ManageScriptsResponse {
     summary: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(rename_all = "snake_case")]
+enum TerrainPivotMode {
+    #[default]
+    #[schemars(description = "Position operations relative to the active camera pivot")]
+    ActiveCamera,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct TerrainPivotPlacement {
+    #[schemars(description = "Strategy used to resolve the placement pivot")]
+    mode: TerrainPivotMode,
+    #[schemars(description = "Optional XYZ offset (studs) applied after resolving the pivot")]
+    offset: Option<[f64; 3]>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TerrainFillBlockOperation {
+    #[schemars(description = "CFrame components used when filling the block (12 numbers)")]
+    cframe_components: [f64; 12],
+    #[schemars(description = "XYZ size of the block in studs")]
+    size: [f64; 3],
+    #[schemars(description = "Material applied to the filled voxels")]
+    material: String,
+    #[serde(default)]
+    #[schemars(description = "Optional occupancy value clamped between 0 and 1")]
+    occupancy: Option<f64>,
+    #[serde(default)]
+    #[schemars(description = "Treat the translation component as relative to the resolved pivot")]
+    pivot_relative: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TerrainFillRegionOperation {
+    #[schemars(description = "Minimum Region3int16 corner (XYZ integers)")]
+    corner_min: [i16; 3],
+    #[schemars(description = "Maximum Region3int16 corner (XYZ integers)")]
+    corner_max: [i16; 3],
+    #[schemars(description = "Material applied to the filled region")]
+    material: String,
+    #[serde(default)]
+    #[schemars(description = "Region resolution to use when filling (defaults to 4)")]
+    resolution: Option<u32>,
+    #[serde(default)]
+    #[schemars(
+        description = "Treat the voxel coordinates as offsets from the resolved pivot cell"
+    )]
+    pivot_relative: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TerrainReplaceMaterialOperation {
+    #[schemars(description = "Source material that should be replaced")]
+    source_material: String,
+    #[schemars(description = "Target material that will be written into the region")]
+    target_material: String,
+    #[schemars(description = "Minimum Region3int16 corner (XYZ integers)")]
+    corner_min: [i16; 3],
+    #[schemars(description = "Maximum Region3int16 corner (XYZ integers)")]
+    corner_max: [i16; 3],
+    #[serde(default)]
+    #[schemars(description = "Region resolution to use when replacing (defaults to 4)")]
+    resolution: Option<u32>,
+    #[serde(default)]
+    #[schemars(
+        description = "Treat the voxel coordinates as offsets from the resolved pivot cell"
+    )]
+    pivot_relative: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct TerrainClearRegionOperation {
+    #[schemars(description = "Optional minimum Region3int16 corner (XYZ integers)")]
+    corner_min: Option<[i16; 3]>,
+    #[schemars(description = "Optional maximum Region3int16 corner (XYZ integers)")]
+    corner_max: Option<[i16; 3]>,
+    #[serde(default)]
+    #[schemars(description = "Region resolution to use when clearing (defaults to 4)")]
+    resolution: Option<u32>,
+    #[serde(default)]
+    #[schemars(
+        description = "Treat the voxel coordinates as offsets from the resolved pivot cell"
+    )]
+    pivot_relative: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TerrainConvertToTerrainOperation {
+    #[schemars(description = "Paths to BasePart instances that should be converted to terrain")]
+    paths: Vec<Vec<String>>,
+    #[serde(default)]
+    #[schemars(description = "Resolution to use when converting parts to terrain")]
+    resolution: Option<u32>,
+    #[serde(default)]
+    #[schemars(description = "Optional material override applied to converted voxels")]
+    target_material: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(tag = "operation", rename_all = "snake_case")]
+enum TerrainOperation {
+    FillBlock(TerrainFillBlockOperation),
+    FillRegion(TerrainFillRegionOperation),
+    ReplaceMaterial(TerrainReplaceMaterialOperation),
+    ClearRegion(TerrainClearRegionOperation),
+    ConvertToTerrain(TerrainConvertToTerrainOperation),
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TerrainOperationsRequest {
+    #[schemars(description = "Ordered set of terrain operations that should be processed")]
+    operations: Vec<TerrainOperation>,
+    #[schemars(
+        description = "Optional placement pivot resolved before applying relative operations"
+    )]
+    pivot: Option<TerrainPivotPlacement>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TerrainOperationResult {
+    #[schemars(description = "Index of the processed terrain operation")]
+    index: usize,
+    #[schemars(description = "Operation identifier that was attempted")]
+    operation: String,
+    #[schemars(description = "True when the operation completed successfully")]
+    success: bool,
+    #[serde(default)]
+    #[schemars(description = "Optional details describing the outcome")]
+    message: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Structured data returned for the processed operation")]
+    details: Option<JsonValue>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TerrainOperationsResponse {
+    #[schemars(description = "Results emitted for each processed terrain operation")]
+    results: Vec<TerrainOperationResult>,
+    #[serde(default)]
+    #[schemars(description = "Optional human readable summary of the batch")]
+    summary: Option<String>,
+    #[schemars(description = "True when at least one operation wrote to terrain")]
+    write_occurred: bool,
+}
+
 #[derive(Debug, Deserialize, Serialize, schemars::JsonSchema, Clone)]
 #[serde(rename_all = "snake_case")]
 enum AssetCollisionStrategy {
@@ -710,6 +864,7 @@ enum ToolArgumentValues {
     ApplyInstanceOperations(ApplyInstanceOperationsRequest),
     ManageScripts(ManageScriptsRequest),
     TestAndPlayControl(TestAndPlayControl),
+    TerrainOperations(TerrainOperationsRequest),
     AssetPipeline(AssetPipelineRequest),
     DiagnosticsAndMetrics(DiagnosticsAndMetricsRequest),
 }
@@ -785,6 +940,17 @@ impl RBXStudioServer {
         Parameters(args): Parameters<TestAndPlayControl>,
     ) -> Result<CallToolResult, ErrorData> {
         self.generic_tool_run(ToolArgumentValues::TestAndPlayControl(args))
+            .await
+    }
+
+    #[tool(
+        description = "Applies bulk terrain authoring operations such as fill_block, fill_region, replace_material, clear_region, and convert_to_terrain."
+    )]
+    async fn terrain_operations(
+        &self,
+        Parameters(args): Parameters<TerrainOperationsRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.generic_tool_run(ToolArgumentValues::TerrainOperations(args))
             .await
     }
 
