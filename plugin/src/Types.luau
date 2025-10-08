@@ -29,6 +29,28 @@ export type InspectEnvironmentArgs = {
         services: InspectServicesScope?,
 }
 
+export type DiagnosticsLogOptions = {
+        includeErrors: boolean?,
+        includeWarnings: boolean?,
+        includeInfo: boolean?,
+        maxEntries: number?,
+        chunkSize: number?,
+}
+
+export type DiagnosticsServiceSelection = {
+        services: { string }?,
+        includeDescendantCounts: boolean?,
+        includeMemoryTags: boolean?,
+}
+
+export type DiagnosticsAndMetricsArgs = {
+        logs: DiagnosticsLogOptions?,
+        includeMicroProfiler: boolean?,
+        includeMemoryStats: boolean?,
+        includeTaskScheduler: boolean?,
+        serviceSelection: DiagnosticsServiceSelection?,
+}
+
 export type InstancePath = { string }
 
 export type InstanceOperationAction = "create" | "update" | "delete"
@@ -147,6 +169,11 @@ export type RunCodeToolArgs = {
 export type InspectEnvironmentToolArgs = {
         tool: "InspectEnvironment",
         params: InspectEnvironmentArgs,
+}
+
+export type DiagnosticsAndMetricsToolArgs = {
+        tool: "DiagnosticsAndMetrics",
+        params: DiagnosticsAndMetricsArgs,
 }
 
 export type ApplyInstanceOperationsToolArgs = {

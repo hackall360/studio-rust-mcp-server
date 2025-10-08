@@ -140,6 +140,10 @@ Claude Desktop and Cursor expose the following Roblox Studio tooling through thi
   files, and publish packages without leaving Claude or Cursor. Each operation reports structured
   status including resolved instance paths, collision handling decisions, placement adjustments, and
   optional package metadata.
+- **`diagnostics_and_metrics`** – Gather troubleshooting data from Studio in a single response. The
+  tool can stream recent error and warning logs in timestamped chunks, capture memory usage
+  (including DeveloperMemoryTag breakdowns), summarise TaskScheduler and service health, and
+  optionally return a MicroProfiler snapshot when you have diagnostics permissions enabled.
 
 > **Safety notice:** Starting a play session or running the test harness will execute scripts and
 > may mutate workspace state that has not been saved. Ensure critical changes are committed to
@@ -157,6 +161,27 @@ Use apply_instance_operations to:
 2. Update Workspace/SetPiece/SpotlightCube so its Color is (1, 0.8, 0.6) and Transparency is 0.25.
 3. Delete Workspace/Temporary/DebugFolder.
 ```
+
+### Requesting diagnostics
+
+The `diagnostics_and_metrics` tool accepts a payload that lets you tailor what Studio collects. For
+example:
+
+```
+{
+  "logs": { "maxEntries": 120, "chunkSize": 40 },
+  "includeMemoryStats": true,
+  "includeTaskScheduler": true,
+  "includeMicroProfiler": false,
+  "serviceSelection": { "services": ["Workspace", "Players"] }
+}
+```
+
+Set `includeMicroProfiler` to `true` only after enabling the MicroProfiler in Studio (View →
+MicroProfiler or File → Studio Settings → Diagnostics → Allow MicroProfiler). Roblox requires that
+permission to be granted per-user; without it the tool will return a note explaining that the dump
+is unavailable. Error and warning logs are chunked for long sessions so MCP clients can page through
+them without hitting token limits.
 
 The MCP client will translate that request into JSON similar to:
 
