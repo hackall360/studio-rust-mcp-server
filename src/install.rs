@@ -7,8 +7,70 @@ use std::io::BufReader;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::vec;
 use std::{env, fs, io};
+
+fn install_plugin() -> Result<()> {
+    let plugin_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/MCPStudioPlugin.rbxm"));
+    let studio = RobloxStudio::locate()?;
+    let plugins = studio.plugins_path();
+    if let Err(err) = fs::create_dir(plugins) {
+        if err.kind() != io::ErrorKind::AlreadyExists {
+            return Err(err.into());
+        }
+    }
+    let output_plugin = Path::new(&plugins).join("MCPStudioPlugin.rbxm");
+    {
+        let mut file = File::create(&output_plugin).wrap_err_with(|| {
+            format!(
+                "Could write Roblox Plugin file at {}",
+                output_plugin.display()
+            )
+        })?;
+        file.write_all(plugin_bytes)?;
+    }
+    println!(
+        "Installed Roblox Studio plugin to {}",
+        output_plugin.display()
+    );
+    Ok(())
+}
+
+fn install_claude(exe_path: &Path) -> Result<&'static str> {
+    install_to_config(get_claude_config(), exe_path, "Claude")
+}
+
+fn install_cursor(exe_path: &Path) -> Result<&'static str> {
+    install_to_config(get_cursor_config(), exe_path, "Cursor")
+}
+
+fn get_lm_studio_config() -> Result<PathBuf> {
+    if cfg!(target_os = "macos") {
+        let home_dir =
+            env::var_os("HOME").ok_or_else(|| eyre!("Could not determine HOME directory"))?;
+        Ok(Path::new(&home_dir)
+            .join("Library")
+            .join("Application Support")
+            .join("LM Studio")
+            .join("mcpServers.json"))
+    } else if cfg!(target_os = "windows") {
+        let app_data =
+            env::var_os("APPDATA").ok_or_else(|| eyre!("Could not find APPDATA directory"))?;
+        Ok(Path::new(&app_data)
+            .join("LM Studio")
+            .join("mcpServers.json"))
+    } else {
+        let home_dir =
+            env::var_os("HOME").ok_or_else(|| eyre!("Could not determine HOME directory"))?;
+        Ok(Path::new(&home_dir)
+            .join(".config")
+            .join("LM Studio")
+            .join("mcpServers.json"))
+    }
+}
+
+fn install_lm_studio(exe_path: &Path) -> Result<&'static str> {
+    install_to_config(get_lm_studio_config(), exe_path, "LM Studio")
+}
 
 fn get_message(successes: String) -> String {
     format!("Roblox Studio MCP is ready to go.
@@ -105,35 +167,14 @@ pub fn install_to_config<'a>(
 }
 
 async fn install_internal() -> Result<String> {
-    let plugin_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/MCPStudioPlugin.rbxm"));
-    let studio = RobloxStudio::locate()?;
-    let plugins = studio.plugins_path();
-    if let Err(err) = fs::create_dir(plugins) {
-        if err.kind() != io::ErrorKind::AlreadyExists {
-            return Err(err.into());
-        }
-    }
-    let output_plugin = Path::new(&plugins).join("MCPStudioPlugin.rbxm");
-    {
-        let mut file = File::create(&output_plugin).wrap_err_with(|| {
-            format!(
-                "Could write Roblox Plugin file at {}",
-                output_plugin.display()
-            )
-        })?;
-        file.write_all(plugin_bytes)?;
-    }
-    println!(
-        "Installed Roblox Studio plugin to {}",
-        output_plugin.display()
-    );
-
+    install_plugin()?;
     let this_exe = get_exe_path()?;
 
     let mut errors = vec![];
-    let results = vec![
-        install_to_config(get_claude_config(), &this_exe, "Claude"),
-        install_to_config(get_cursor_config(), &this_exe, "Cursor"),
+    let results = [
+        install_claude(&this_exe),
+        install_cursor(&this_exe),
+        install_lm_studio(&this_exe),
     ];
 
     let successes: Vec<_> = results
@@ -143,7 +184,7 @@ async fn install_internal() -> Result<String> {
 
     if successes.is_empty() {
         let error = errors.into_iter().fold(
-            eyre!("Failed to install to either Claude or Cursor"),
+            eyre!("Failed to install to any supported MCP clients"),
             |report, e| report.note(e),
         );
         return Err(error);
@@ -153,6 +194,70 @@ async fn install_internal() -> Result<String> {
     let msg = get_message(successes.join("\n"));
     println!("{msg}");
     Ok(msg)
+}
+
+pub async fn studio_install() -> Result<()> {
+    use dialoguer::{theme::ColorfulTheme, Select};
+
+    const OPTIONS: [&str; 5] = [
+        "Install/Update Studio Plugin",
+        "Install/Update Claude MCP connection",
+        "Install/Update Cursor MCP connection",
+        "Install/Update LM Studio MCP plugin",
+        "Exit",
+    ];
+
+    let theme = ColorfulTheme::default();
+
+    loop {
+        let selection = Select::with_theme(&theme)
+            .with_prompt("Select an action to perform")
+            .items(&OPTIONS)
+            .default(0)
+            .interact_opt()?;
+
+        let Some(selection) = selection else {
+            println!("Exiting installer.");
+            break;
+        };
+
+        let label = OPTIONS[selection];
+        match selection {
+            0 => run_task(label, || install_plugin()),
+            1 => run_task(label, || {
+                let exe = get_exe_path()?;
+                install_claude(&exe).map(|_| ())
+            }),
+            2 => run_task(label, || {
+                let exe = get_exe_path()?;
+                install_cursor(&exe).map(|_| ())
+            }),
+            3 => run_task(label, || {
+                let exe = get_exe_path()?;
+                install_lm_studio(&exe).map(|_| ())
+            }),
+            4 => {
+                println!("Exiting installer.");
+                break;
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    Ok(())
+}
+
+fn run_task<F>(label: &str, task: F)
+where
+    F: FnOnce() -> Result<()>,
+{
+    match task() {
+        Ok(_) => println!("{label} completed successfully.\n"),
+        Err(error) => {
+            eprintln!("{label} failed: {error:#}");
+            println!();
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]

@@ -1,5 +1,5 @@
 use axum::routing::{get, post};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use color_eyre::eyre::Result;
 use rbx_studio_server::*;
 use rmcp::ServiceExt;
@@ -17,9 +17,22 @@ mod rbx_studio_server;
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Run as MCP server on stdio
-    #[arg(short, long)]
-    stdio: bool,
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    /// Launch the Studio installer (legacy flag maintained for backwards compatibility)
+    #[arg(long = "studio-install", hide = true)]
+    legacy_studio_install: bool,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Run the MCP server using stdio transport
+    #[command(alias = "stdio")]
+    Server,
+    /// Launch the interactive Roblox Studio installer
+    #[command(name = "studio-install")]
+    StudioInstall,
 }
 
 #[tokio::main]
@@ -33,10 +46,20 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    if !args.stdio {
-        return install::install().await;
-    }
+    let command = if args.legacy_studio_install {
+        Some(Command::StudioInstall)
+    } else {
+        args.command
+    };
 
+    match command {
+        Some(Command::Server) => run_server().await,
+        Some(Command::StudioInstall) => install::studio_install().await,
+        None => install::install().await,
+    }
+}
+
+async fn run_server() -> Result<()> {
     tracing::debug!("Debug MCP tracing enabled");
 
     let server_state = Arc::new(Mutex::new(AppState::new()));
