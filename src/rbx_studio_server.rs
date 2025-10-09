@@ -84,7 +84,7 @@ impl ServerHandler for RBXStudioServer {
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "User run_command to query data from Roblox Studio place or to change it"
+                "Use tools like run_code, insert_model, inspect_environment, environment_control, apply_instance_operations, manage_scripts, test_and_play_control, editor_session_control, terrain_operations, asset_pipeline, collection_and_attributes, physics_and_navigation, diagnostics_and_metrics, and data_model_snapshot. See the README for the complete catalog and usage notes."
                     .to_string(),
             ),
         }
