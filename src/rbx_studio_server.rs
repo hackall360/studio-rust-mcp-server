@@ -2041,11 +2041,15 @@ pub async fn proxy_handler(
     let id = command.id.ok_or_eyre("Got proxy command with no id")?;
     tracing::debug!("Received request to proxy {command:?}");
     let (tx, mut rx) = mpsc::unbounded_channel();
-    {
+    let trigger = {
         let mut state = state.lock().await;
         state.process_queue.push_back(command);
         state.output_map.insert(id, tx);
-    }
+        state.trigger.clone()
+    };
+    trigger
+        .send(())
+        .map_err(|error| eyre!("failed to notify proxy loop: {error}"))?;
     let response = rx.recv().await.ok_or_eyre("Couldn't receive response")??;
     {
         let mut state = state.lock().await;
@@ -2190,5 +2194,62 @@ mod tests {
         let locked = state.lock().await;
         assert!(locked.process_queue.is_empty(), "process queue not drained");
         assert!(locked.output_map.is_empty(), "output map not drained");
+    }
+
+    #[tokio::test]
+    async fn proxy_handler_notifies_waiter() {
+        let state = Arc::new(Mutex::new(AppState::new()));
+        let (command, id) = ToolArguments::new(ToolArgumentValues::RunCode(RunCode {
+            command: "print('hi')".to_string(),
+        }));
+
+        let mut waiter = {
+            let locked = state.lock().await;
+            let mut waiter = locked.waiter.clone();
+            waiter.borrow_and_update();
+            waiter
+        };
+
+        let handler_state = state.clone();
+        let handler = tokio::spawn(proxy_handler(
+            State(handler_state),
+            Json(command.clone()),
+        ));
+
+        timeout(Duration::from_secs(1), waiter.changed())
+            .await
+            .expect("waiter was not notified before timeout")
+            .expect("waiter channel closed unexpectedly");
+
+        let tx = loop {
+            if let Some(tx) = {
+                let locked = state.lock().await;
+                locked.output_map.get(&id).cloned()
+            } {
+                break tx;
+            }
+            tokio::task::yield_now().await;
+        };
+
+        tx.send(Ok("ok".to_string()))
+            .expect("failed to send proxy response");
+
+        handler
+            .await
+            .expect("proxy handler task panicked")
+            .expect("proxy handler returned error");
+
+        {
+            let mut locked = state.lock().await;
+            let queued = locked
+                .process_queue
+                .pop_front()
+                .expect("proxy command was not enqueued");
+            assert_eq!(queued.id, Some(id));
+            assert!(
+                locked.output_map.get(&id).is_none(),
+                "proxy handler did not clean up output sender"
+            );
+        }
     }
 }
