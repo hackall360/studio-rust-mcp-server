@@ -23,6 +23,10 @@ struct Args {
     /// Launch the Studio installer (legacy flag maintained for backwards compatibility)
     #[arg(long = "studio-install", hide = true)]
     legacy_studio_install: bool,
+
+    /// Run the MCP server using stdio transport (legacy flag maintained for backwards compatibility)
+    #[arg(long = "stdio")]
+    legacy_stdio: bool,
 }
 
 #[derive(Subcommand)]
@@ -48,6 +52,8 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let command = if args.legacy_studio_install {
         Some(Command::StudioInstall)
+    } else if args.legacy_stdio {
+        Some(Command::Server)
     } else {
         args.command
     };
