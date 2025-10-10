@@ -7,6 +7,7 @@ use std::io::BufReader;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, fs, io};
 
 fn install_plugin() -> Result<()> {
@@ -69,7 +70,94 @@ fn get_lm_studio_config() -> Result<PathBuf> {
 }
 
 fn install_lm_studio(exe_path: &Path) -> Result<&'static str> {
-    install_to_config(get_lm_studio_config(), exe_path, "LM Studio")
+    install_to_config(get_lm_studio_config(), exe_path, "LM Studio")?;
+    install_lm_studio_plugin_files(exe_path)?;
+    Ok("LM Studio")
+}
+
+fn install_lm_studio_plugin_files(exe_path: &Path) -> Result<()> {
+    let plugin_dir = get_lm_studio_plugin_dir()?;
+    fs::create_dir_all(&plugin_dir).wrap_err_with(|| {
+        format!(
+            "Failed to create LM Studio plugin directory at {}",
+            plugin_dir.display()
+        )
+    })?;
+
+    let manifest_path = plugin_dir.join("manifest.json");
+    write_json_file(
+        &manifest_path,
+        &json!({
+            "type": "plugin",
+            "runner": "mcpBridge",
+            "owner": "mcp",
+            "name": "roblox-studio"
+        }),
+    )?;
+
+    let bridge_config_path = plugin_dir.join("mcp-bridge-config.json");
+    write_json_file(
+        &bridge_config_path,
+        &json!({
+            "command": exe_path,
+            "args": ["--stdio"],
+        }),
+    )?;
+
+    let install_state_path = plugin_dir.join("install-state.json");
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    write_json_file(
+        &install_state_path,
+        &json!({
+            "by": "mcp-bridge-v1",
+            "at": now,
+        }),
+    )?;
+
+    println!(
+        "Installed MCP Studio plugin to LM Studio plugin directory at {}",
+        plugin_dir.display()
+    );
+
+    Ok(())
+}
+
+fn write_json_file(path: &Path, value: &Value) -> Result<()> {
+    let mut file = File::create(path)
+        .wrap_err_with(|| format!("Failed to create LM Studio file at {}", path.display()))?;
+    file.write_all(serde_json::to_string_pretty(value)?.as_bytes())
+        .wrap_err_with(|| format!("Failed to write LM Studio file at {}", path.display()))?;
+    Ok(())
+}
+
+fn get_lm_studio_plugin_dir() -> Result<PathBuf> {
+    let home_dir = lm_studio_home_dir()?;
+    Ok(home_dir
+        .join(".lmstudio")
+        .join("extensions")
+        .join("plugins")
+        .join("mcp")
+        .join("roblox-studio"))
+}
+
+fn lm_studio_home_dir() -> Result<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        env::var_os("USERPROFILE")
+            .or_else(|| env::var_os("HOME"))
+            .map(PathBuf::from)
+            .ok_or_else(|| eyre!("Could not determine LM Studio home directory"))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| eyre!("Could not determine LM Studio home directory"))
+    }
 }
 
 fn get_message(successes: String) -> String {

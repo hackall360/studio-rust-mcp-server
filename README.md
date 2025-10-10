@@ -1,7 +1,7 @@
 # Roblox Studio MCP Server
 
 This repository contains a reference implementation of the Model Context Protocol (MCP) that enables
-communication between Roblox Studio via a plugin and [Claude Desktop](https://claude.ai/download) or [Cursor](https://www.cursor.com/).
+communication between Roblox Studio via a plugin and [Claude Desktop](https://claude.ai/download), [Cursor](https://www.cursor.com/), or [LM Studio](https://lmstudio.ai/).
 It consists of the following Rust-based components, which communicate through internal shared
 objects.
 
@@ -23,7 +23,7 @@ The setup process also contains a short plugin installation and Claude Desktop c
 
 ### Install with release binaries
 
-This MCP Server supports pretty much any MCP Client but will automatically set up only [Claude Desktop](https://claude.ai/download) and [Cursor](https://www.cursor.com/) if found.
+This MCP Server supports pretty much any MCP Client but will automatically set up [Claude Desktop](https://claude.ai/download), [Cursor](https://www.cursor.com/), and [LM Studio](https://lmstudio.ai/) if found.
 
 To set up automatically:
 
@@ -34,7 +34,18 @@ To set up automatically:
    1. Go to the [releases](https://github.com/Roblox/studio-rust-mcp-server/releases) page and
       download the latest release for your platform.
    1. Unzip the downloaded file if necessary and run the installer.
-   1. Restart Claude/Cursor and Roblox Studio if they are running.
+   1. Restart Claude/Cursor/LM Studio and Roblox Studio if they are running.
+
+### Command line usage
+
+Running the binary without arguments triggers the legacy, non-interactive installer flow. Additional
+commands let you target specific workflows:
+
+- `rbx-studio-mcp studio-install` (or `rbx-studio-mcp --studio-install`) launches an interactive menu
+  where you can install or update the Roblox Studio plugin alongside individual MCP client
+  integrations, including LM Studio.
+- `rbx-studio-mcp server` (or `rbx-studio-mcp --stdio`) starts the MCP server over stdio transport so
+  MCP-compatible AI tools can connect directly.
 
 ### Setting up manually
 
@@ -54,6 +65,11 @@ To set up manually add following to your MCP Client config:
 ```
 
 On macOS the path would be something like `"/Applications/RobloxStudioMCP.app/Contents/MacOS/rbx-studio-mcp"` if you move the app to the Applications directory.
+
+For LM Studio, the installer provisions a plugin directory at `%USERPROFILE%\\.lmstudio\\extensions\\plugins\\mcp\\roblox-studio`
+(or the equivalent path under your home directory on macOS/Linux) containing `install-state.json`,
+`manifest.json`, and `mcp-bridge-config.json`. The bridge configuration points to the MCP server
+binary with `--stdio` arguments so that LM Studio can launch the connection automatically.
 
 ### Build from source
 
