@@ -171,13 +171,13 @@ Note: connecting a third-party LLM to Roblox Studio via an MCP server will share
 To uninstall, delete the MCPStudioPlugin.rbxm from your Plugins directory.")
 }
 
-// returns OS dependant claude_desktop_config.json path
 fn get_claude_config() -> Result<PathBuf> {
-    let home_dir = env::var_os("HOME");
-
     let config_path = if cfg!(target_os = "macos") {
-        Path::new(&home_dir.unwrap())
-            .join("Library/Application Support/Claude/claude_desktop_config.json")
+        let home_dir = env::var_os("HOME").ok_or_else(|| {
+            eyre!("Could not determine HOME directory required for Claude configuration on macOS")
+        })?;
+
+        Path::new(&home_dir).join("Library/Application Support/Claude/claude_desktop_config.json")
     } else if cfg!(target_os = "windows") {
         let app_data =
             env::var_os("APPDATA").ok_or_else(|| eyre!("Could not find APPDATA directory"))?;
@@ -392,7 +392,21 @@ pub async fn install() -> Result<()> {
 mod tests {
     use super::*;
     use std::fs;
+    use temp_env::with_var;
     use uuid::Uuid;
+
+    #[test]
+    fn get_claude_config_returns_error_without_home_on_macos() {
+        if cfg!(target_os = "macos") {
+            with_var("HOME", None::<&str>, || {
+                let err = get_claude_config().expect_err("expected missing HOME to return error");
+                assert!(
+                    err.to_string().contains("HOME"),
+                    "error message should mention HOME variable, got: {err}"
+                );
+            });
+        }
+    }
 
     #[test]
     fn install_to_config_creates_missing_parent_dirs() {
@@ -403,8 +417,12 @@ mod tests {
             fs::remove_dir_all(&base_dir).expect("failed to clear existing test directory");
         }
 
-        install_to_config(Ok(config_path.clone()), Path::new("dummy-exe"), "TestClient")
-            .expect("install_to_config should succeed");
+        install_to_config(
+            Ok(config_path.clone()),
+            Path::new("dummy-exe"),
+            "TestClient",
+        )
+        .expect("install_to_config should succeed");
 
         assert!(config_path.exists(), "config file should be created");
         assert!(
