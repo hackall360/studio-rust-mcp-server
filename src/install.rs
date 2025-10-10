@@ -221,6 +221,15 @@ pub fn install_to_config<'a>(
     name: &'a str,
 ) -> Result<&'a str> {
     let config_path = config_path?;
+
+    if let Some(parent_dir) = config_path.parent() {
+        fs::create_dir_all(parent_dir).wrap_err_with(|| {
+            format!(
+                "Failed to create parent directory {} for {name} config file",
+                parent_dir.display()
+            )
+        })?;
+    }
     let mut config: serde_json::Map<String, Value> = {
         if !config_path.exists() {
             let mut file = File::create(&config_path).map_err(|e| {
@@ -377,4 +386,39 @@ pub async fn install() -> Result<()> {
 pub async fn install() -> Result<()> {
     install_internal().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use uuid::Uuid;
+
+    #[test]
+    fn install_to_config_creates_missing_parent_dirs() {
+        let base_dir = std::env::temp_dir().join(format!("mcp-test-{}", Uuid::new_v4()));
+        let config_path = base_dir.join("nested").join("config.json");
+
+        if base_dir.exists() {
+            fs::remove_dir_all(&base_dir).expect("failed to clear existing test directory");
+        }
+
+        install_to_config(Ok(config_path.clone()), Path::new("dummy-exe"), "TestClient")
+            .expect("install_to_config should succeed");
+
+        assert!(config_path.exists(), "config file should be created");
+        assert!(
+            config_path.parent().unwrap().exists(),
+            "parent directory should be created"
+        );
+
+        let contents = fs::read_to_string(&config_path).expect("config file should be readable");
+        let value: Value = serde_json::from_str(&contents).expect("config should be valid JSON");
+        assert_eq!(
+            value["mcpServers"]["Roblox Studio"]["command"],
+            json!("dummy-exe")
+        );
+
+        fs::remove_dir_all(&base_dir).expect("failed to clean up test directory");
+    }
 }
