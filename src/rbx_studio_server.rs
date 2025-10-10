@@ -2,7 +2,7 @@ use crate::error::Result;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{extract::State, Json};
-use color_eyre::eyre::{Error, OptionExt};
+use color_eyre::eyre::{eyre, Error, OptionExt};
 use rmcp::{
     handler::server::tool::Parameters,
     model::{
@@ -15,7 +15,7 @@ use serde_json::Value as JsonValue;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::sync::Arc;
-use tokio::sync::oneshot::Receiver;
+use tokio::sync::oneshot::{error::TryRecvError, Receiver};
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::Duration;
 use uuid::Uuid;
@@ -2055,38 +2055,140 @@ pub async fn proxy_handler(
     Ok(Json(RunCommandResponse { response, id }))
 }
 
-pub async fn dud_proxy_loop(state: PackedState, exit: Receiver<()>) {
+pub async fn dud_proxy_loop(state: PackedState, mut exit: Receiver<()>) {
     let client = reqwest::Client::new();
 
     let mut waiter = { state.lock().await.waiter.clone() };
-    while exit.is_empty() {
-        let entry = { state.lock().await.process_queue.pop_front() };
-        if let Some(entry) = entry {
-            let res = client
-                .post(format!("http://127.0.0.1:{STUDIO_PLUGIN_PORT}/proxy"))
-                .json(&entry)
-                .send()
-                .await;
-            if let Ok(res) = res {
-                let tx = {
-                    state
-                        .lock()
-                        .await
-                        .output_map
-                        .remove(&entry.id.unwrap())
-                        .unwrap()
-                };
-                let res = res
-                    .json::<RunCommandResponse>()
-                    .await
-                    .map(|r| r.response)
-                    .map_err(Into::into);
-                tx.send(res).unwrap();
-            } else {
-                tracing::error!("Failed to proxy: {res:?}");
-            };
-        } else {
-            waiter.changed().await.unwrap();
+    if !matches!(exit.try_recv(), Err(TryRecvError::Empty)) {
+        drain_pending_requests(&state).await;
+        return;
+    }
+    tokio::pin!(exit);
+
+    loop {
+        let state_clone = state.clone();
+        let maybe_entry = tokio::select! {
+            _ = &mut exit => break,
+            entry = async {
+                loop {
+                    if let Some(entry) = {
+                        let mut locked = state_clone.lock().await;
+                        locked.process_queue.pop_front()
+                    } {
+                        break Some(entry);
+                    }
+
+                    if waiter.changed().await.is_err() {
+                        break None;
+                    }
+                }
+            } => entry,
+        };
+
+        let Some(entry) = maybe_entry else { break };
+
+        if let Err(error) = handle_proxy_entry(&state, &client, entry).await {
+            tracing::error!(?error, "Failed to proxy request");
         }
+    }
+
+    drain_pending_requests(&state).await;
+}
+
+async fn handle_proxy_entry(
+    state: &PackedState,
+    client: &reqwest::Client,
+    entry: ToolArguments,
+) -> Result<(), Error> {
+    let id = entry
+        .id
+        .ok_or_else(|| eyre!("Got proxy command with no id in queue"))?;
+
+    let response = client
+        .post(format!("http://127.0.0.1:{STUDIO_PLUGIN_PORT}/proxy"))
+        .json(&entry)
+        .send()
+        .await?;
+
+    let tx = {
+        let mut locked = state.lock().await;
+        locked
+            .output_map
+            .remove(&id)
+            .ok_or_else(|| eyre!("Missing response sender for {id}"))?
+    };
+
+    let result = response
+        .json::<RunCommandResponse>()
+        .await
+        .map(|r| r.response)
+        .map_err(Into::into);
+
+    tx.send(result)?;
+
+    Ok(())
+}
+
+async fn drain_pending_requests(state: &PackedState) {
+    let (queued_entries, mut senders) = {
+        let mut locked = state.lock().await;
+        let queued_entries: Vec<_> = locked.process_queue.drain(..).collect();
+        let senders = std::mem::take(&mut locked.output_map);
+        (queued_entries, senders)
+    };
+
+    for entry in queued_entries {
+        if let Some(id) = entry.id {
+            if let Some(tx) = senders.remove(&id) {
+                let _ = tx.send(Err(eyre!("Proxy loop shutting down").into()));
+            }
+        }
+    }
+
+    for (_, tx) in senders {
+        let _ = tx.send(Err(eyre!("Proxy loop shutting down").into()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::time::{timeout, Duration};
+
+    #[tokio::test]
+    async fn dud_proxy_loop_drains_on_shutdown() {
+        let state = Arc::new(Mutex::new(AppState::new()));
+        let (command, id) = ToolArguments::new(ToolArgumentValues::RunCode(RunCode {
+            command: "print('hi')".to_string(),
+        }));
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        {
+            let mut locked = state.lock().await;
+            locked.process_queue.push_back(command);
+            locked.output_map.insert(id, tx);
+        }
+
+        let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+        let _ = exit_tx.send(());
+
+        let loop_task = tokio::spawn(dud_proxy_loop(state.clone(), exit_rx));
+
+        let message = timeout(Duration::from_secs(1), rx.recv())
+            .await
+            .expect("proxy loop did not respond before timeout")
+            .expect("proxy response channel closed unexpectedly");
+
+        let err = message.expect_err("expected proxy loop shutdown error");
+        assert!(
+            err.to_string().contains("Proxy loop shutting down"),
+            "unexpected shutdown message: {err:?}"
+        );
+
+        loop_task.await.expect("proxy loop task panicked");
+
+        let locked = state.lock().await;
+        assert!(locked.process_queue.is_empty(), "process queue not drained");
+        assert!(locked.output_map.is_empty(), "output map not drained");
     }
 }
