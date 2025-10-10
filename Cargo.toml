@@ -28,6 +28,9 @@ core-foundation = "0.10.0"
 [build-dependencies]
 rojo = "7.4.4"
 
+[dev-dependencies]
+temp-env = "0.3"
+
 [package.metadata.bundle]
 name = "RobloxStudioMCP"
 description = "Model Context Protocol server for Roblox Studio"
