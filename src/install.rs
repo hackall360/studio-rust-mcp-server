@@ -195,9 +195,7 @@ fn get_cursor_config() -> Result<PathBuf> {
     let home_dir = env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))
         .ok_or_else(|| {
-            eyre!(
-                "Could not determine HOME or USERPROFILE required for Cursor configuration"
-            )
+            eyre!("Could not determine HOME or USERPROFILE required for Cursor configuration")
         })?;
     Ok(Path::new(&home_dir).join(".cursor").join("mcp.json"))
 }
@@ -416,9 +414,8 @@ mod tests {
     fn get_cursor_config_returns_error_without_home_or_userprofile() {
         with_var("HOME", None::<&str>, || {
             with_var("USERPROFILE", None::<&str>, || {
-                let err = get_cursor_config().expect_err(
-                    "expected missing HOME and USERPROFILE to return error",
-                );
+                let err = get_cursor_config()
+                    .expect_err("expected missing HOME and USERPROFILE to return error");
                 assert!(
                     err.to_string().contains("HOME or USERPROFILE"),
                     "error message should mention missing HOME or USERPROFILE, got: {err}"
