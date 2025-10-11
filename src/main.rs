@@ -71,6 +71,7 @@ async fn run_server() -> Result<()> {
     let server_state = Arc::new(Mutex::new(AppState::new()));
 
     let (close_tx, close_rx) = tokio::sync::oneshot::channel();
+    let close_signal: CloseSignal = Arc::new(Mutex::new(Some(close_tx)));
 
     let mut close_rx = Some(close_rx);
 
@@ -87,20 +88,26 @@ async fn run_server() -> Result<()> {
                 .route("/proxy", post(proxy_handler))
                 .with_state(server_state_clone);
             tracing::info!("This MCP instance is HTTP server listening on {STUDIO_PLUGIN_PORT}");
-            tokio::spawn(async move {
+            let close_signal = Arc::clone(&close_signal);
+            let server_future = async move {
                 axum::serve(listener, app)
                     .with_graceful_shutdown(async move {
                         _ = close_rx.await;
                     })
                     .await
-                    .unwrap();
-            })
+                    .map_err(ServerError::from)
+            };
+
+            spawn_http_server(server_future, close_signal)
         }
         Ok(BindOutcome::AddrInUse) => {
             tracing::info!("This MCP instance will use proxy since port is busy");
             let close_rx = close_rx.take().expect("close_rx already taken");
+            let close_signal = Arc::clone(&close_signal);
             tokio::spawn(async move {
                 dud_proxy_loop(server_state_clone, close_rx).await;
+                signal_shutdown(&close_signal).await;
+                Ok::<(), ServerError>(())
             })
         }
         Err(err) => {
@@ -118,16 +125,55 @@ async fn run_server() -> Result<()> {
         })?;
     service.waiting().await?;
 
-    close_tx.send(()).ok();
+    signal_shutdown(&close_signal).await;
     tracing::info!("Waiting for web server to gracefully shutdown");
-    server_handle.await.ok();
-    tracing::info!("Bye!");
-    Ok(())
+    match server_handle.await {
+        Ok(Ok(())) => {
+            tracing::info!("Bye!");
+            Ok(())
+        }
+        Ok(Err(err)) => {
+            let err_msg = err.to_string();
+            tracing::error!(error = %err_msg, "HTTP server exited with error");
+            Err(err)
+        }
+        Err(err) => {
+            tracing::error!(error = %err, "HTTP server task panicked");
+            Err(err.into())
+        }
+    }
 }
 
 enum BindOutcome {
     Listener(tokio::net::TcpListener),
     AddrInUse,
+}
+
+type CloseSignal = Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>;
+type ServerError = color_eyre::Report;
+
+async fn signal_shutdown(close_signal: &CloseSignal) {
+    let mut guard = close_signal.lock().await;
+    if let Some(tx) = guard.take() {
+        let _ = tx.send(());
+    }
+}
+
+fn spawn_http_server<F>(
+    server_future: F,
+    close_signal: CloseSignal,
+) -> tokio::task::JoinHandle<Result<(), ServerError>>
+where
+    F: std::future::Future<Output = Result<(), ServerError>> + Send + 'static,
+{
+    tokio::spawn(async move {
+        let result = server_future.await;
+        if let Err(ref err) = result {
+            tracing::error!(error = %err, "HTTP server failed; initiating shutdown");
+            signal_shutdown(&close_signal).await;
+        }
+        result
+    })
 }
 
 async fn bind_studio_listener(addr: (Ipv4Addr, u16)) -> Result<BindOutcome, std::io::Error> {
@@ -142,6 +188,7 @@ async fn bind_studio_listener(addr: (Ipv4Addr, u16)) -> Result<BindOutcome, std:
 mod tests {
     use super::*;
     use std::net::TcpListener as StdTcpListener;
+    use tracing_test::traced_test;
 
     #[tokio::test]
     async fn bind_studio_listener_returns_addr_in_use() {
@@ -174,5 +221,31 @@ mod tests {
                 assert_eq!(err.kind(), io::ErrorKind::AddrNotAvailable);
             }
         }
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn spawn_http_server_logs_and_signals_on_error() {
+        let (close_tx, close_rx) = tokio::sync::oneshot::channel();
+        let close_signal: CloseSignal = Arc::new(Mutex::new(Some(close_tx)));
+        let failing_future = async {
+            Err::<(), ServerError>(ServerError::from(io::Error::new(
+                io::ErrorKind::Other,
+                "boom",
+            )))
+        };
+
+        let handle = spawn_http_server(failing_future, Arc::clone(&close_signal));
+
+        let server_result = handle.await.expect("server task panicked");
+        assert!(
+            server_result.is_err(),
+            "expected server future to return error"
+        );
+        close_rx
+            .await
+            .expect("close signal not triggered by server task");
+
+        assert!(logs_contain("HTTP server failed; initiating shutdown"));
     }
 }
