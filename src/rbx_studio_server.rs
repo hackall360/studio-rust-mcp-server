@@ -2108,12 +2108,6 @@ async fn handle_proxy_entry(
         .id
         .ok_or_else(|| eyre!("Got proxy command with no id in queue"))?;
 
-    let response = client
-        .post(format!("http://127.0.0.1:{STUDIO_PLUGIN_PORT}/proxy"))
-        .json(&entry)
-        .send()
-        .await?;
-
     let tx = {
         let mut locked = state.lock().await;
         locked
@@ -2122,15 +2116,30 @@ async fn handle_proxy_entry(
             .ok_or_else(|| eyre!("Missing response sender for {id}"))?
     };
 
-    let result = response
-        .json::<RunCommandResponse>()
-        .await
-        .map(|r| r.response)
-        .map_err(Into::into);
+    let response = client
+        .post(format!("http://127.0.0.1:{STUDIO_PLUGIN_PORT}/proxy"))
+        .json(&entry)
+        .send()
+        .await;
 
-    tx.send(result)?;
-
-    Ok(())
+    match response {
+        Ok(response) => match response.json::<RunCommandResponse>().await {
+            Ok(run_response) => {
+                tx.send(Ok(run_response.response))?;
+                Ok(())
+            }
+            Err(error) => {
+                let message = format!("Failed to decode proxy response for {id}: {error}");
+                let _ = tx.send(Err(eyre!(message.clone()).into()));
+                Err(eyre!(message))
+            }
+        },
+        Err(error) => {
+            let message = format!("Failed to forward proxy request for {id}: {error}");
+            let _ = tx.send(Err(eyre!(message.clone()).into()));
+            Err(eyre!(message))
+        }
+    }
 }
 
 async fn drain_pending_requests(state: &PackedState) {
@@ -2211,10 +2220,7 @@ mod tests {
         };
 
         let handler_state = state.clone();
-        let handler = tokio::spawn(proxy_handler(
-            State(handler_state),
-            Json(command.clone()),
-        ));
+        let handler = tokio::spawn(proxy_handler(State(handler_state), Json(command.clone())));
 
         timeout(Duration::from_secs(1), waiter.changed())
             .await
@@ -2251,5 +2257,49 @@ mod tests {
                 "proxy handler did not clean up output sender"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn dud_proxy_loop_reports_forward_error() {
+        let state = Arc::new(Mutex::new(AppState::new()));
+        let (command, id) = ToolArguments::new(ToolArgumentValues::RunCode(RunCode {
+            command: "print('hi')".to_string(),
+        }));
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let trigger = {
+            let mut locked = state.lock().await;
+            locked.process_queue.push_back(command);
+            locked.output_map.insert(id, tx);
+            locked.trigger.clone()
+        };
+
+        trigger
+            .send(())
+            .expect("failed to signal proxy loop for new task");
+
+        let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+
+        let loop_task = tokio::spawn(dud_proxy_loop(state.clone(), exit_rx));
+
+        let message = timeout(Duration::from_secs(1), rx.recv())
+            .await
+            .expect("proxy loop did not respond before timeout")
+            .expect("proxy response channel closed unexpectedly");
+
+        let err = message.expect_err("expected proxy loop to return an error");
+        assert!(
+            err.to_string().contains("Failed to forward proxy request"),
+            "unexpected proxy error message: {err:?}"
+        );
+
+        let _ = exit_tx.send(());
+        loop_task
+            .await
+            .expect("proxy loop task panicked after forwarding failure");
+
+        let locked = state.lock().await;
+        assert!(locked.process_queue.is_empty(), "process queue not drained");
+        assert!(locked.output_map.is_empty(), "output map not drained");
     }
 }
