@@ -232,35 +232,57 @@ pub fn install_to_config<'a>(
             )
         })?;
     }
-    let mut config: serde_json::Map<String, Value> = {
-        if !config_path.exists() {
-            let mut file = File::create(&config_path).map_err(|e| {
-                eyre!("Could not create {name} config file at {config_path:?}: {e:#?}")
-            })?;
-            file.write_all(serde_json::to_string(&serde_json::Map::new())?.as_bytes())?;
-        }
+    let mut updated = false;
+    let mut config: serde_json::Map<String, Value> = if config_path.exists() {
         let config_file = File::open(&config_path)
-            .map_err(|error| eyre!("Could not read or create {name} config file: {error:#?}"))?;
+            .map_err(|error| eyre!("Could not read {name} config file: {error:#?}"))?;
         let reader = BufReader::new(config_file);
         serde_json::from_reader(reader)?
+    } else {
+        updated = true;
+        serde_json::Map::new()
     };
 
     if !matches!(config.get("mcpServers"), Some(Value::Object(_))) {
         config.insert("mcpServers".to_string(), json!({}));
+        updated = true;
     }
 
-    config["mcpServers"]["Roblox Studio"] = json!({
-      "command": &exe_path,
-      "args": [
-        "--stdio"
-      ]
+    let desired_entry = json!({
+        "command": exe_path,
+        "args": ["--stdio"],
     });
 
-    let mut file = File::create(&config_path)?;
-    file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
-        .map_err(|e| eyre!("Could not write to {name} config file at {config_path:?}: {e:#?}"))?;
+    let entry_updated =
+        if let Some(mcp_servers) = config.get_mut("mcpServers").and_then(Value::as_object_mut) {
+            match mcp_servers.get("Roblox Studio") {
+                Some(existing) if existing == &desired_entry => false,
+                _ => {
+                    mcp_servers.insert("Roblox Studio".to_string(), desired_entry);
+                    true
+                }
+            }
+        } else {
+            false
+        };
 
-    println!("Installed MCP Studio plugin to {name} config {config_path:?}");
+    if entry_updated {
+        updated = true;
+    }
+
+    if updated {
+        let mut file = File::create(&config_path).map_err(|e| {
+            eyre!("Could not open {name} config file for writing at {config_path:?}: {e:#?}")
+        })?;
+        file.write_all(serde_json::to_string_pretty(&config)?.as_bytes())
+            .map_err(|e| {
+                eyre!("Could not write to {name} config file at {config_path:?}: {e:#?}")
+            })?;
+
+        println!("Installed MCP Studio plugin to {name} config {config_path:?}");
+    } else {
+        println!("MCP Studio plugin already configured in {name} config {config_path:?}");
+    }
 
     Ok(name)
 }
@@ -452,6 +474,53 @@ mod tests {
             value["mcpServers"]["Roblox Studio"]["command"],
             json!("dummy-exe")
         );
+
+        fs::remove_dir_all(&base_dir).expect("failed to clean up test directory");
+    }
+
+    #[test]
+    fn install_to_config_is_idempotent_when_configuration_unchanged() {
+        let base_dir = std::env::temp_dir().join(format!("mcp-test-{}", Uuid::new_v4()));
+        let config_path = base_dir.join("config.json");
+
+        install_to_config(
+            Ok(config_path.clone()),
+            Path::new("dummy-exe"),
+            "TestClient",
+        )
+        .expect("initial install_to_config should succeed");
+
+        let metadata = fs::metadata(&config_path).expect("metadata should be available");
+        let original_modified = metadata.modified().ok();
+
+        let mut permissions = metadata.permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&config_path, permissions)
+            .expect("should be able to set read-only permissions");
+
+        install_to_config(
+            Ok(config_path.clone()),
+            Path::new("dummy-exe"),
+            "TestClient",
+        )
+        .expect("second install_to_config should detect unchanged configuration");
+
+        if let (Some(original_modified), Ok(current_modified)) = (
+            original_modified,
+            fs::metadata(&config_path).and_then(|m| m.modified()),
+        ) {
+            assert_eq!(
+                current_modified, original_modified,
+                "config file should not be modified when configuration is unchanged"
+            );
+        }
+
+        let mut permissions = fs::metadata(&config_path)
+            .expect("metadata should be available for cleanup")
+            .permissions();
+        permissions.set_readonly(false);
+        fs::set_permissions(&config_path, permissions)
+            .expect("should be able to clear read-only permissions");
 
         fs::remove_dir_all(&base_dir).expect("failed to clean up test directory");
     }
