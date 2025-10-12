@@ -1,3 +1,17 @@
+//! HTTP <-> stdio bridge that exposes Roblox Studio tooling through the Model Context Protocol.
+//!
+//! The module coordinates long-poll communication with the Roblox Studio plugin, manages tool
+//! invocation lifecycles, and forwards responses to downstream MCP clients. The Roblox Studio plugin
+//! is expected to follow the networking guidance documented in the
+//! [HttpService reference](https://create.roblox.com/docs/en-us/reference/engine/classes/HttpService),
+//! while many of the tools exposed here leverage engine systems such as
+//! [CollectionService](https://create.roblox.com/docs/en-us/reference/engine/classes/CollectionService),
+//! [PathfindingService](https://create.roblox.com/docs/en-us/reference/engine/classes/PathfindingService),
+//! [VirtualInputManager](https://create.roblox.com/docs/en-us/reference/engine/classes/VirtualInputManager),
+//! and [Terrain](https://create.roblox.com/docs/en-us/reference/engine/classes/Terrain).
+//!
+//! Additional architectural notes are available in [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
+//! and the tool catalog is detailed in [`docs/TOOLS.md`](../docs/TOOLS.md).
 use crate::error::Result;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -20,27 +34,38 @@ use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::Duration;
 use uuid::Uuid;
 
+/// Default TCP port used by the Roblox Studio plugin when establishing the HTTP bridge.
+/// The port selection matches the expectation baked into the companion plugin's
+/// configuration script.
 pub const STUDIO_PLUGIN_PORT: u16 = 44755;
+/// Duration of each long-poll request. Roblox Studio issues a follow-up request as soon as the
+/// timeout elapses, consistent with recommendations for [HttpService long polling](https://create.roblox.com/docs/en-us/studio/networking/http-requests#implementing-long-polling).
 const LONG_POLL_DURATION: Duration = Duration::from_secs(15);
 
+/// Payload submitted by the MCP runtime that should be handed off to the Roblox Studio plugin.
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ToolArguments {
     args: ToolArgumentValues,
     id: Option<Uuid>,
 }
 
+/// Response emitted by the Roblox Studio plugin after completing a tool request.
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct RunCommandResponse {
     response: String,
     id: Uuid,
 }
 
+/// Shared state container that coordinates pending requests, streaming responses, and long-poll
+/// wakeups between the HTTP handlers and the MCP service implementation.
 pub struct AppState {
     process_queue: VecDeque<ToolArguments>,
     output_map: HashMap<Uuid, mpsc::UnboundedSender<Result<String>>>,
     waiter: watch::Receiver<()>,
     trigger: watch::Sender<()>,
 }
+/// Convenience alias used to wrap the shared [`AppState`] in an `Arc<Mutex<...>>` so tasks can
+/// safely access and mutate the queue.
 pub type PackedState = Arc<Mutex<AppState>>;
 
 impl AppState {
@@ -70,6 +95,7 @@ impl ToolArguments {
         )
     }
 }
+/// Implementation of the MCP `ServerHandler` trait that exposes Roblox Studio tools.
 #[derive(Clone)]
 pub struct RBXStudioServer {
     state: PackedState,
@@ -1818,6 +1844,9 @@ impl RBXStudioServer {
     #[tool(
         description = "Runs a command in Roblox Studio and returns the printed output. Can be used to both make changes and retrieve information"
     )]
+    /// Bridge for the `run_code` MCP tool, executing Luau snippets inside Studio. The plugin runs the
+    /// supplied code using the same primitives available in the Studio command bar as documented in
+    /// the [Studio scripting overview](https://create.roblox.com/docs/en-us/studio/command-bar).
     async fn run_code(
         &self,
         Parameters(args): Parameters<RunCode>,
@@ -1829,6 +1858,8 @@ impl RBXStudioServer {
     #[tool(
         description = "Inserts a model from the Roblox marketplace into the workspace. Returns the inserted model name."
     )]
+    /// Bridge for the `insert_model` MCP tool, which locates Marketplace assets and inserts them via
+    /// the [InsertService](https://create.roblox.com/docs/en-us/reference/engine/classes/InsertService).
     async fn insert_model(
         &self,
         Parameters(args): Parameters<InsertModel>,
@@ -1840,6 +1871,10 @@ impl RBXStudioServer {
     #[tool(
         description = "Inspects the current Studio environment and returns JSON summarising selection, camera and service state."
     )]
+    /// Bridge for the `inspect_environment` tool that captures read-only information such as
+    /// selection state, camera properties, and service metadata. The responses match the structures
+    /// surfaced in the Explorer and viewport as outlined in the
+    /// [Studio overview](https://create.roblox.com/docs/en-us/studio/overview/studio-overview).
     async fn inspect_environment(
         &self,
         Parameters(args): Parameters<InspectEnvironment>,
@@ -1851,6 +1886,10 @@ impl RBXStudioServer {
     #[tool(
         description = "Configures lighting, atmosphere, post processing, terrain water, and ambient soundscape settings."
     )]
+    /// Bridge for the `environment_control` tool that configures lighting, atmosphere, and audio
+    /// within Studio. It touches services such as `Lighting`, `SoundService`, and environment effects
+    /// described throughout the
+    /// [environment and lighting documentation](https://create.roblox.com/docs/en-us/studio/lighting).
     async fn environment_control(
         &self,
         Parameters(args): Parameters<EnvironmentControlRequest>,
@@ -1862,6 +1901,9 @@ impl RBXStudioServer {
     #[tool(
         description = "Applies a batch of create/update/delete operations against instances in the open Studio session."
     )]
+    /// Bridge for the `apply_instance_operations` tool which orchestrates bulk instance creation and
+    /// editing. These operations correspond to Explorer manipulations and property edits described in
+    /// the [Instance class reference](https://create.roblox.com/docs/en-us/reference/engine/classes/Instance).
     async fn apply_instance_operations(
         &self,
         Parameters(args): Parameters<ApplyInstanceOperationsRequest>,
@@ -1873,6 +1915,9 @@ impl RBXStudioServer {
     #[tool(
         description = "Creates, inspects, and edits Script/LocalScript/ModuleScript instances in the current Studio session."
     )]
+    /// Bridge for the `manage_scripts` tool that scaffolds and edits `Script`, `LocalScript`, and
+    /// `ModuleScript` instances. Script authoring best practices are documented in the
+    /// [Studio scripting guide](https://create.roblox.com/docs/en-us/studio/scripts).
     async fn manage_scripts(
         &self,
         Parameters(args): Parameters<ManageScriptsRequest>,
@@ -1884,6 +1929,10 @@ impl RBXStudioServer {
     #[tool(
         description = "Controls Studio play/test sessions and TestService runs. Supports play_solo, stop, run_tests, and run_playtest."
     )]
+    /// Bridge for the `test_and_play_control` tool which manages play sessions, automated testing,
+    /// and virtual input sequences. It leverages `StudioService`, `TestService`, and
+    /// `VirtualInputManager` in line with the
+    /// [playtesting workflow documentation](https://create.roblox.com/docs/en-us/studio/testing/intro-to-testing).
     async fn test_and_play_control(
         &self,
         Parameters(args): Parameters<TestAndPlayControl>,
@@ -1895,6 +1944,10 @@ impl RBXStudioServer {
     #[tool(
         description = "Controls editor session state such as selection, camera transforms, framing, and opening scripts."
     )]
+    /// Bridge for the `editor_session_control` tool that performs non-mutating editor operations such
+    /// as focusing the camera or opening scripts, aligning with the behaviors described for the
+    /// Studio viewport and Explorer in the
+    /// [editing environment reference](https://create.roblox.com/docs/en-us/studio/manager/using-explorer).
     async fn editor_session_control(
         &self,
         Parameters(args): Parameters<EditorSessionControlRequest>,
@@ -1906,6 +1959,9 @@ impl RBXStudioServer {
     #[tool(
         description = "Applies bulk terrain authoring operations such as fill_block, fill_region, replace_material, clear_region, and convert_to_terrain."
     )]
+    /// Bridge for the `terrain_operations` tool that issues voxel editing commands mirroring the
+    /// actions available in the Terrain Editor, as outlined in the
+    /// [terrain authoring manual](https://create.roblox.com/docs/en-us/studio/terrain/terrain-editor-overview).
     async fn terrain_operations(
         &self,
         Parameters(args): Parameters<TerrainOperationsRequest>,
@@ -1917,6 +1973,9 @@ impl RBXStudioServer {
     #[tool(
         description = "Executes asset pipeline workflows including marketplace search, insertion, filesystem import, and package publishing."
     )]
+    /// Bridge for the `asset_pipeline` tool that searches and imports Marketplace assets or local
+    /// files, following the flows highlighted in the
+    /// [asset manager documentation](https://create.roblox.com/docs/en-us/studio/assets/asset-manager).
     async fn asset_pipeline(
         &self,
         Parameters(args): Parameters<AssetPipelineRequest>,
@@ -1928,6 +1987,10 @@ impl RBXStudioServer {
     #[tool(
         description = "Manages CollectionService tags and instance attributes, supporting list_tags, add_tags, remove_tags, sync_attributes, and query_by_tag."
     )]
+    /// Bridge for the `collection_and_attributes` tool that syncs CollectionService tags and instance
+    /// attributes, complementing the
+    /// [CollectionService reference](https://create.roblox.com/docs/en-us/reference/engine/classes/CollectionService)
+    /// and attribute best practices documented by Roblox.
     async fn collection_and_attributes(
         &self,
         Parameters(args): Parameters<CollectionAndAttributesRequest>,
@@ -1939,6 +2002,10 @@ impl RBXStudioServer {
     #[tool(
         description = "Coordinates PhysicsService collision groups and PathfindingService navigation queries."
     )]
+    /// Bridge for the `physics_and_navigation` tool that manipulates collision groups and computes
+    /// navigation paths via `PhysicsService` and `PathfindingService`. Roblox documents these systems
+    /// in the [physics services reference](https://create.roblox.com/docs/en-us/physics/collision-groups)
+    /// and [pathfinding guide](https://create.roblox.com/docs/en-us/studio/pathfinding/pathfinding-overview).
     async fn physics_and_navigation(
         &self,
         Parameters(args): Parameters<PhysicsAndNavigationRequest>,
@@ -1950,6 +2017,9 @@ impl RBXStudioServer {
     #[tool(
         description = "Collects diagnostics such as recent log history (chunked), memory usage, optional microprofiler dumps, and scheduler stats."
     )]
+    /// Bridge for the `diagnostics_and_metrics` tool that aggregates logs, memory statistics, and
+    /// optional microprofiler dumps. These match the telemetry surfaces described in the
+    /// [performance and diagnostics guide](https://create.roblox.com/docs/en-us/studio/performance/optimization-overview).
     async fn diagnostics_and_metrics(
         &self,
         Parameters(args): Parameters<DiagnosticsAndMetricsRequest>,
@@ -1961,6 +2031,8 @@ impl RBXStudioServer {
     #[tool(
         description = "Collects read-only snapshots of the DataModel with optional class filters, property sampling, and pagination."
     )]
+    /// Bridge for the `data_model_snapshot` tool that produces read-only captures of the DataModel in
+    /// line with the [DataModel class documentation](https://create.roblox.com/docs/en-us/reference/engine/classes/DataModel).
     async fn data_model_snapshot(
         &self,
         Parameters(args): Parameters<DataModelSnapshotRequest>,
@@ -1969,6 +2041,7 @@ impl RBXStudioServer {
             .await
     }
 
+    /// Helper that enqueues a tool invocation for Roblox Studio and waits for the plugin to respond.
     async fn generic_tool_run(
         &self,
         args: ToolArgumentValues,
@@ -2001,6 +2074,7 @@ impl RBXStudioServer {
     }
 }
 
+/// HTTP GET handler used by the Roblox Studio plugin to fetch pending tool requests.
 pub async fn request_handler(State(state): State<PackedState>) -> Result<impl IntoResponse> {
     let timeout = tokio::time::timeout(LONG_POLL_DURATION, async {
         loop {
@@ -2021,6 +2095,7 @@ pub async fn request_handler(State(state): State<PackedState>) -> Result<impl In
     }
 }
 
+/// HTTP POST handler invoked by the plugin when returning a tool result payload.
 pub async fn response_handler(
     State(state): State<PackedState>,
     Json(payload): Json<RunCommandResponse>,
@@ -2034,6 +2109,7 @@ pub async fn response_handler(
     Ok(tx.send(Ok(payload.response))?)
 }
 
+/// HTTP POST handler used in proxy mode when the port is occupied by another MCP instance.
 pub async fn proxy_handler(
     State(state): State<PackedState>,
     Json(command): Json<ToolArguments>,
@@ -2059,6 +2135,7 @@ pub async fn proxy_handler(
     Ok(Json(RunCommandResponse { response, id }))
 }
 
+/// Fallback loop that forwards requests to the active MCP instance when running as a proxy.
 pub async fn dud_proxy_loop(state: PackedState, mut exit: Receiver<()>) {
     let client = reqwest::Client::new();
 
