@@ -1,3 +1,14 @@
+//! Binary entry point for the Roblox Studio MCP server.
+//!
+//! The executable acts as a thin orchestration layer over the installer and
+//! stdio-facing MCP server runtime. Documentation for the surrounding
+//! architecture and Roblox Studio integration lives in
+//! [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) and
+//! [`docs/TOOLS.md`](../docs/TOOLS.md).
+//!
+//! Roblox Studio communicates with plugins over HTTP as described in the
+//! [Roblox Studio plugin documentation](https://create.roblox.com/docs/en-us/studio/plugins/intro-to-plugins),
+//! while downstream MCP clients connect through stdio.
 use axum::routing::{get, post};
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::Result;
@@ -12,8 +23,14 @@ mod error;
 mod install;
 mod rbx_studio_server;
 
-/// Simple MCP proxy for Roblox Studio
-/// Run without arguments to install the plugin
+/// Command-line interface for installing the Studio plugin or running the MCP server.
+///
+/// Running the binary without arguments triggers the guided installer. The
+/// `server` command, or legacy `--stdio` flag, starts the stdio transport that
+/// allows MCP-compatible tools to exchange messages with Roblox Studio.
+/// Roblox Studio plugin installation follows the official
+/// [plugin deployment guidance](https://create.roblox.com/docs/en-us/studio/plugins/publishing-plugins),
+/// ensuring the generated plugin is discoverable under the **Plugins** tab.
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -65,6 +82,15 @@ async fn main() -> Result<()> {
     }
 }
 
+/// Start the stdio MCP server and bridge it to the HTTP interface used by the
+/// Roblox Studio plugin.
+///
+/// The function binds an HTTP listener (or falls back to proxy mode when the
+/// port is already in use), spins up the `RBXStudioServer`, and blocks until the
+/// stdio transport is terminated. Roblox Studio performs long-polling against
+/// the `/request` endpoint (matching the
+/// [HttpService networking patterns](https://create.roblox.com/docs/en-us/reference/engine/classes/HttpService))
+/// while tool responses are posted back to `/response` and `/proxy`.
 async fn run_server() -> Result<()> {
     tracing::debug!("Debug MCP tracing enabled");
 
@@ -152,6 +178,7 @@ enum BindOutcome {
 type CloseSignal = Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>;
 type ServerError = color_eyre::Report;
 
+/// Notify the HTTP server task that the process is shutting down.
 async fn signal_shutdown(close_signal: &CloseSignal) {
     let mut guard = close_signal.lock().await;
     if let Some(tx) = guard.take() {
@@ -159,6 +186,8 @@ async fn signal_shutdown(close_signal: &CloseSignal) {
     }
 }
 
+/// Spawn the HTTP server on a background task and mirror failures back to the
+/// main loop.
 fn spawn_http_server<F>(
     server_future: F,
     close_signal: CloseSignal,
@@ -176,6 +205,10 @@ where
     })
 }
 
+/// Attempt to bind to the TCP address used by the Roblox Studio plugin.
+///
+/// When the port is already occupied, the function returns
+/// `BindOutcome::AddrInUse` so the caller can fall back to proxy mode.
 async fn bind_studio_listener(addr: (Ipv4Addr, u16)) -> Result<BindOutcome, std::io::Error> {
     match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => Ok(BindOutcome::Listener(listener)),

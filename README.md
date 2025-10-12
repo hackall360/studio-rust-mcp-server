@@ -8,6 +8,13 @@ objects.
 - A web server built on `axum` that a Studio plugin long polls.
 - A `rmcp` server that talks to Claude via `stdio` transport.
 
+## Documentation
+
+- [Architecture overview](docs/ARCHITECTURE.md) – explains how the HTTP/stdio bridge, installer, and
+  plugin interact, with references to the Roblox Studio systems they rely on.
+- [Tool catalogue](docs/TOOLS.md) – documents every MCP tool, links to the
+  underlying Roblox documentation, and suggests prompts for common workflows.
+
 When LLM requests to run a tool, the plugin will get a request through the long polling and post a
 response. It will cause responses to be sent to the Claude app.
 
